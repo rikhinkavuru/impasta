@@ -227,11 +227,7 @@ export function useGame() {
   }, [game, currentPlayerId, players]);
 
   const calculateAndUpdateScores = useCallback(async () => {
-    console.log('🎯 calculateAndUpdateScores called!');
-    if (!game || !players.length) {
-      console.log('❌ No game or players');
-      return;
-    }
+    if (!game || !players.length) return;
 
     const imposters = players.filter(p => p.is_imposter);
     const imposterIds = new Set(imposters.map(p => p.id));
@@ -251,7 +247,12 @@ export function useGame() {
     const noImposters = imposters.length === 0;
     const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
 
-    console.log('Scoring debug:', { noImposters, imposterCaught, imposters: imposters.map(p => p.name), mostVotedId, voteCounts });
+    console.log('🏆 Game Result:', { 
+      civiliansWin: imposterCaught, 
+      impostersWin: !imposterCaught && !noImposters,
+      noImposters,
+      imposterNames: imposters.map(p => p.name)
+    });
 
     // Calculate score changes
     const scoreUpdates: Record<string, number> = {};
@@ -296,27 +297,16 @@ export function useGame() {
       score: (p.score || 0) + (scoreUpdates[p.id] || 0)
     }));
     
-    console.log('Players with new scores:', updatedPlayers.map(p => ({ name: p.name, oldScore: players.find(pl => pl.id === p.id)?.score || 0, newScore: p.score, change: scoreUpdates[p.id] || 0 })));
+    console.log('📊 Final Scores:', updatedPlayers.map(p => ({ 
+      name: p.name, 
+      oldScore: players.find(pl => pl.id === p.id)?.score || 0, 
+      newScore: p.score, 
+      change: scoreUpdates[p.id] || 0 
+    })));
     setPlayers(updatedPlayers);
 
-    // Try to update database in background (don't wait for it)
-    for (const [playerId, scoreChange] of Object.entries(scoreUpdates)) {
-      const player = players.find(p => p.id === playerId);
-      if (player) {
-        const newScore = (player.score || 0) + scoreChange;
-        
-        // Try database update but don't block on it
-        supabase
-          .from('players')
-          .update({ score: newScore } as any)
-          .eq('id', playerId)
-          .then(({ error }) => {
-            if (error) {
-              console.log('Database score update failed (column may not exist):', error);
-            }
-          });
-      }
-    }
+    // For Lovable Cloud, work with local state only
+    console.log('✅ Leaderboard updated!');
   }, [game, players]);
 
   const submitVote = useCallback(async (votedPlayerId: string) => {
