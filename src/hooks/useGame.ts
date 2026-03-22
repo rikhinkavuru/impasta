@@ -141,8 +141,19 @@ export function useGame() {
     const mostVotedPlayer = maxVotes > 0 ? players.find(p => p.id === Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0]) : null;
     
     // Determine who won this round
+    // Civilians win when most voted player is an imposter (imposter was caught)
+    // Imposters win when most voted player is a civilian (innocent person was voted out)
     const civiliansWon = mostVotedPlayer && mostVotedPlayer.is_imposter;
     const impostersWon = !civiliansWon;
+
+    console.log('Score calculation:', {
+      mostVotedPlayer: mostVotedPlayer?.name,
+      mostVotedIsImposter: mostVotedPlayer?.is_imposter,
+      civiliansWon,
+      impostersWon,
+      voteCounts,
+      players: players.map(p => ({ name: p.name, is_imposter: p.is_imposter, vote_for: p.vote_for }))
+    });
 
     // Update scores for each player
     for (const player of players) {
@@ -157,6 +168,7 @@ export function useGame() {
       }
 
       // Check if player voted correctly
+      // A correct vote means voting for someone on the opposite team
       if (player.vote_for) {
         const votedPlayer = players.find(p => p.id === player.vote_for);
         if (votedPlayer && votedPlayer.is_imposter !== player.is_imposter) {
@@ -164,6 +176,14 @@ export function useGame() {
           correctVotesIncrement = 1;
         }
       }
+
+      console.log(`Player ${player.name}:`, {
+        is_imposter: player.is_imposter,
+        pointsToAdd,
+        roundsWonIncrement,
+        correctVotesIncrement,
+        vote_for: player.vote_for
+      });
 
       // Update the player's score
       if (pointsToAdd > 0) {
