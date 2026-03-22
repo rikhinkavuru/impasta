@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Copy, Check, Settings, Users, Play, ChevronDown, ChevronUp, Shuffle, Hash } from 'lucide-react';
+import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash } from 'lucide-react';
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
 import { cn } from '@/lib/utils';
@@ -26,10 +26,6 @@ function inferImposterRandom(g: Game): boolean {
 export default function LobbyScreen({ game, players, isHost, onStartGame, onUpdateSettings }: LobbyScreenProps) {
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [customWord, setCustomWord] = useState('');
-  const [customClue, setCustomClue] = useState('');
-  const [useCustomWord, setUseCustomWord] = useState(false);
-
   const [difficulty, setDifficulty] = useState<Difficulty>((game.difficulty as Difficulty) || 'medium');
   const [imposterRandom, setImposterRandom] = useState(() => inferImposterRandom(game));
   const [fixedCount, setFixedCount] = useState(() =>
@@ -81,252 +77,139 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleStart = () => {
-    if (useCustomWord && customWord.trim() && customClue.trim()) {
-      onStartGame(customWord.trim(), customClue.trim());
-    } else {
-      onStartGame();
-    }
-  };
-
   const playerCount = players.length;
-  const minSel = Math.min(imposterMin, playerCount);
-  const displayMax = Math.max(minSel, Math.min(imposterMax, playerCount));
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-6 animate-fade-in-up">
-        <div className="text-center space-y-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Game Code</p>
+    <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-background overflow-hidden">
+      
+      {/* Top Section: Game Code */}
+      <div className="w-full max-w-md pt-12 space-y-6 animate-fade-in-up">
+        <div className="text-center space-y-4">
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Game Code</p>
           <button
             onClick={copyCode}
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-secondary border border-border active:scale-[0.97] transition-transform"
+            className="group relative inline-flex items-center gap-4 px-10 py-5 rounded-3xl bg-white premium-shadow border border-border/50 transition-all duration-300 active:scale-95"
           >
-            <span className="text-3xl font-bold font-mono tracking-[0.25em]">{game.code}</span>
-            {copied ? <Check className="w-5 h-5 text-game-success" /> : <Copy className="w-5 h-5 text-muted-foreground" />}
+            <span className="text-4xl font-extrabold font-mono tracking-[0.2em] text-foreground">{game.code}</span>
+            <div className="absolute -right-2 -top-2 w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg transition-transform group-hover:scale-110">
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+            </div>
           </button>
-          <p className="text-xs text-muted-foreground">Share this code with friends</p>
         </div>
+      </div>
 
-        {/* Player list */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-            <Users className="w-3.5 h-3.5" />
-            Players ({players.length})
+      {/* Middle Section: Players */}
+      <div className="flex-1 w-full max-w-2xl flex flex-wrap items-center justify-center gap-4 p-8">
+        {players.map((player, i) => (
+          <div
+            key={player.id}
+            className="animate-fade-in-up flex items-center gap-3 px-6 py-3 rounded-full bg-white premium-shadow border border-border/50 animate-float"
+            style={{ 
+              animationDelay: `${i * 150}ms`,
+              animationDuration: `${3 + (i % 2)}s`
+            }}
+          >
+            <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-extrabold text-primary">
+              {player.name[0].toUpperCase()}
+            </div>
+            <span className="font-bold text-sm text-foreground tracking-tight">{player.name}</span>
+            {player.is_host && (
+              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+            )}
           </div>
-          <div className="space-y-1.5">
-            {players.map((player, i) => (
-              <div
-                key={player.id}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl bg-secondary/60 border border-border/50 animate-fade-in-up"
-                style={{ animationDelay: `${i * 60}ms` }}
-              >
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                  {player.name[0].toUpperCase()}
-                </div>
-                <span className="font-medium text-sm flex-1">{player.name}</span>
-                {player.is_host && (
-                  <span className="text-[10px] font-semibold text-accent uppercase tracking-wider">Host</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
+        ))}
+        {players.length < 3 && (
+          <p className="w-full text-center text-[10px] font-extrabold text-muted-foreground/40 uppercase tracking-[0.2em] mt-8 animate-pulse">
+            Waiting for more players...
+          </p>
+        )}
+      </div>
 
-        {/* Host Settings */}
+      {/* Bottom Section: Controls */}
+      <div className="w-full max-w-md pb-12 space-y-6 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+        
         {isHost && (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
+              className="flex items-center justify-center gap-2 text-[10px] font-extrabold text-muted-foreground/60 hover:text-foreground transition-colors w-full uppercase tracking-[0.2em]"
             >
               <Settings className="w-3.5 h-3.5" />
-              Game Settings
-              {showSettings ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
+              Settings
+              {showSettings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
             {showSettings && (
-              <div className="space-y-4 animate-fade-in-up rounded-2xl bg-secondary/40 border border-border/50 p-4">
+              <div className="space-y-6 p-6 rounded-[2rem] bg-white premium-shadow border border-border/50 animate-scale-in">
                 {/* Difficulty */}
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Difficulty</p>
-                  <div className="grid grid-cols-3 gap-1.5">
+                <div className="space-y-4">
+                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Difficulty</p>
+                  <div className="grid grid-cols-3 gap-2">
                     {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
                       <button
                         key={d}
                         onClick={() => setDifficulty(d)}
-                        className={`px-3 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all active:scale-[0.96] ${
+                        className={`px-4 py-3 rounded-2xl text-[10px] font-extrabold uppercase tracking-widest transition-all ${
                           difficulty === d
-                            ? 'bg-primary text-primary-foreground shadow-md'
-                            : 'bg-secondary/60 border border-border/50 text-muted-foreground hover:text-foreground'
+                            ? 'bg-primary text-primary-foreground accent-glow'
+                            : 'bg-secondary/40 text-muted-foreground hover:bg-secondary'
                         }`}
                       >
                         {d}
                       </button>
                     ))}
                   </div>
-                  <p className="text-[11px] text-muted-foreground">{difficultyDescriptions[difficulty]}</p>
                 </div>
 
-                {/* Imposters: fixed count vs random range */}
-                <div className="space-y-3">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Imposters</p>
+                {/* Imposters */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Imposters</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={() => {
-                        if (imposterRandom) {
-                          setFixedCount(Math.min(minSel, playerCount));
-                        }
-                        setImposterRandom(false);
-                      }}
+                      onClick={() => setImposterRandom(false)}
                       className={cn(
-                        'flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition-all active:scale-[0.98]',
-                        !imposterRandom
-                          ? 'bg-primary text-primary-foreground shadow-md'
-                          : 'border border-border/50 bg-secondary/60 text-muted-foreground hover:text-foreground',
+                        'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
+                        !imposterRandom ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
                       )}
                     >
-                      <Hash className="h-4 w-4 shrink-0" />
+                      <Hash className="h-3.5 w-3.5" />
                       Fixed
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!imposterRandom) {
-                          setImposterMin(1);
-                          setImposterMax(Math.max(1, Math.min(4, playerCount)));
-                        }
-                        setImposterRandom(true);
-                      }}
+                      onClick={() => setImposterRandom(true)}
                       className={cn(
-                        'flex items-center justify-center gap-2 rounded-xl px-3 py-3 text-sm font-semibold transition-all active:scale-[0.98]',
-                        imposterRandom
-                          ? 'bg-primary text-primary-foreground shadow-md'
-                          : 'border border-border/50 bg-secondary/60 text-muted-foreground hover:text-foreground',
+                        'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
+                        imposterRandom ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
                       )}
                     >
-                      <Shuffle className="h-4 w-4 shrink-0" />
+                      <Shuffle className="h-3.5 w-3.5" />
                       Random
                     </button>
                   </div>
-
-                  {!imposterRandom ? (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Same count every round (0 = none)</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {Array.from({ length: playerCount + 1 }, (_, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => setFixedCount(i)}
-                            className={cn(
-                              'min-w-[2.25rem] rounded-lg px-2.5 py-2 text-sm font-semibold transition-all active:scale-[0.96]',
-                              fixedCount === i
-                                ? 'bg-primary text-primary-foreground shadow-md'
-                                : 'border border-border/50 bg-secondary/60 text-muted-foreground hover:text-foreground',
-                            )}
-                          >
-                            {i}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3 rounded-xl border border-border/60 bg-background/30 p-4">
-                      <p className="text-xs leading-relaxed text-muted-foreground">
-                        Each new round picks a random number of imposters in this range (capped by how many people are playing).
-                      </p>
-                      <div className="space-y-3">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
-                          <div className="flex-1">
-                            <label className="text-xs text-muted-foreground block mb-1.5">Minimum</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max={playerCount}
-                              value={imposterMin}
-                              onChange={(e) => {
-                                const val = Math.max(0, Math.min(Number(e.target.value), playerCount));
-                                setImposterMin(val);
-                                if (val > imposterMax) setImposterMax(val);
-                              }}
-                              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm font-medium"
-                            />
-                          </div>
-                          <span className="hidden text-sm text-muted-foreground sm:block">to</span>
-                          <div className="flex-1">
-                            <label className="text-xs text-muted-foreground block mb-1.5">Maximum</label>
-                            <input
-                              type="number"
-                              min="0"
-                              max={playerCount}
-                              value={imposterMax}
-                              onChange={(e) => {
-                                const val = Math.max(imposterMin, Math.min(Number(e.target.value), playerCount));
-                                setImposterMax(val);
-                              }}
-                              className="w-full px-3 py-2 rounded-lg bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm font-medium"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        {minSel === displayMax
-                          ? `Will use ${minSel} imposter${minSel === 1 ? '' : 's'} each round (set min & max different for variety)`
-                          : `Each round: between ${minSel} and ${displayMax} imposters`}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Custom Word */}
-                <div className="space-y-2">
-                  <button
-                    onClick={() => setUseCustomWord(!useCustomWord)}
-                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {useCustomWord ? '✕ Use random word instead' : '+ Use custom word'}
-                  </button>
-                  {useCustomWord && (
-                    <div className="space-y-2 animate-fade-in-up">
-                      <input
-                        type="text"
-                        value={customWord}
-                        onChange={(e) => setCustomWord(e.target.value)}
-                        placeholder="Secret word"
-                        className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-                      />
-                      <input
-                        type="text"
-                        value={customClue}
-                        onChange={(e) => setCustomClue(e.target.value)}
-                        placeholder="Imposter's clue"
-                        className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-                      />
-                    </div>
-                  )}
                 </div>
               </div>
             )}
+
+            <button
+              onClick={() => onStartGame()}
+              disabled={players.length < 3}
+              className="w-full pill-button bg-primary text-primary-foreground accent-glow disabled:opacity-30 disabled:grayscale"
+            >
+              START GAME
+            </button>
           </div>
         )}
 
-        {/* Start button (host only) */}
-        {isHost && (
-          <button
-            onClick={handleStart}
-            disabled={players.length < 3}
-            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base disabled:opacity-40 active:scale-[0.97] transition-transform"
-          >
-            <Play className="w-5 h-5" />
-            Start Game {players.length < 3 && `(need ${3 - players.length} more)`}
-          </button>
-        )}
-
         {!isHost && (
-          <div className="text-center text-sm text-muted-foreground animate-pulse">
-            Waiting for host to start the game...
+          <div className="text-center py-6 space-y-4">
+            <div className="inline-flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '200ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '400ms' }} />
+            </div>
+            <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Waiting for host</p>
           </div>
         )}
       </div>

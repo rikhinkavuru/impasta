@@ -12,13 +12,14 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
-      <Sonner />
+      <Sonner position="top-center" />
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
+        <div className="min-h-screen bg-background text-foreground transition-colors duration-500 selection:bg-primary/20">
+          <Routes>
+            <Route path="/" element={<Index />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </div>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

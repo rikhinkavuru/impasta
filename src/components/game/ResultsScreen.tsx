@@ -1,4 +1,4 @@
-import { Trophy, Skull, RotateCcw, Medal } from 'lucide-react';
+import { Trophy, Skull, RotateCcw, Medal, ArrowRight } from 'lucide-react';
 import type { Game, Player, SessionScore } from '@/hooks/useGame';
 
 interface ResultsScreenProps {
@@ -30,12 +30,12 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
   const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
 
   const resultTitle = noImposters
-    ? 'No Imposters!'
+    ? 'NO IMPOSTERS!'
     : imposterCaught
-    ? 'Civilians Win!'
+    ? 'CIVILIANS WIN!'
     : imposters.length > 1
-    ? 'Imposters Win!'
-    : 'Imposter Wins!';
+    ? 'IMPOSTERS WIN!'
+    : 'IMPOSTER WINS!';
 
   const resultSubtitle = noImposters
     ? 'There were no imposters this round.'
@@ -44,77 +44,92 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
     : `${imposters.map(p => p.name).join(', ')} got away with it!`;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-6 animate-scale-in">
-        {/* Result banner */}
-        <div className="text-center space-y-4">
-          <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl ${
-            imposterCaught || noImposters ? 'bg-game-success/15' : 'bg-game-danger/15'
+    <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
+      <div className="w-full max-w-md space-y-12 animate-fade-in-up">
+        
+        {/* Cinematic Reveal Section */}
+        <div className="text-center space-y-8 animate-scale-in">
+          <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full premium-shadow ${
+            imposterCaught || noImposters ? 'bg-primary/10' : 'bg-destructive/10'
           }`}>
             {imposterCaught || noImposters
-              ? <Trophy className="w-10 h-10 text-game-success" />
-              : <Skull className="w-10 h-10 text-game-danger" />
+              ? <Trophy className="w-16 h-16 text-primary animate-bounce" />
+              : <Skull className="w-16 h-16 text-destructive animate-float" />
             }
           </div>
-          <div>
-            <h2 className={`text-2xl font-bold ${imposterCaught || noImposters ? 'text-game-success' : 'text-game-danger'}`}>
+          
+          <div className="space-y-4">
+            <h2 className={`text-5xl font-extrabold tracking-tighter ${
+              imposterCaught || noImposters ? 'text-primary' : 'text-destructive'
+            }`}>
               {resultTitle}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">{resultSubtitle}</p>
+            <p className="text-sm font-medium text-muted-foreground/80 tracking-tight">{resultSubtitle}</p>
           </div>
         </div>
 
         {/* Word reveal */}
-        <div className="px-5 py-4 rounded-2xl bg-secondary/60 border border-border/50 text-center space-y-1">
-          <p className="text-xs text-muted-foreground uppercase tracking-wider">The word was</p>
-          <p className="text-xl font-bold">{game.word}</p>
-          <p className="text-xs text-muted-foreground">Imposter clue: "{game.imposter_clue}"</p>
+        <div className="p-8 rounded-[3rem] bg-white premium-shadow border border-border/50 text-center space-y-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+          <div className="space-y-2">
+            <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">The Secret Word</p>
+            <p className="text-4xl font-extrabold tracking-tighter text-foreground uppercase">{game.word}</p>
+          </div>
+          <div className="w-full h-px bg-border/50" />
+          <div className="space-y-2">
+            <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Imposter Clue</p>
+            <p className="text-lg font-extrabold tracking-tight text-muted-foreground uppercase italic">"{game.imposter_clue}"</p>
+          </div>
         </div>
 
         {/* Vote breakdown */}
-        <div className="space-y-1.5">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Vote Results</p>
-          {players.map((player) => {
-            const votes = voteCounts[player.id] || 0;
-            return (
-              <div
-                key={player.id}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
-                  player.is_imposter
-                    ? 'bg-game-danger/10 border-game-danger/20'
-                    : 'bg-secondary/40 border-border/30'
-                }`}
-              >
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                  player.is_imposter ? 'bg-game-danger/20 text-game-danger' : 'bg-primary/10 text-primary'
-                }`}>
-                  {player.name[0].toUpperCase()}
+        <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em] text-center">Vote Results</p>
+          <div className="grid grid-cols-1 gap-3">
+            {players.map((player) => {
+              const votes = voteCounts[player.id] || 0;
+              return (
+                <div
+                  key={player.id}
+                  className={`flex items-center gap-4 px-6 py-4 rounded-[2rem] border transition-all duration-300 ${
+                    player.is_imposter
+                      ? 'bg-destructive/5 border-destructive/20'
+                      : 'bg-white premium-shadow border-border/50'
+                  }`}
+                >
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                    player.is_imposter ? 'bg-destructive/20 text-destructive' : 'bg-primary/10 text-primary'
+                  }`}>
+                    {player.name[0].toUpperCase()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-extrabold tracking-tight uppercase">
+                      {player.name}
+                      {player.is_imposter && (
+                        <span className="ml-2 text-[10px] font-black text-destructive tracking-widest">IMPOSTER</span>
+                      )}
+                    </p>
+                    <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">"{player.clue}"</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`text-lg font-black tabular-nums ${votes === maxVotes && votes > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                      {votes}
+                    </p>
+                    <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">VOTES</p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium">
-                    {player.name}
-                    {player.is_imposter && (
-                      <span className="ml-1.5 text-[10px] font-bold text-game-danger uppercase">Imposter</span>
-                    )}
-                  </p>
-                  <p className="text-xs font-mono text-muted-foreground">"{player.clue}"</p>
-                </div>
-                <span className={`text-sm font-bold tabular-nums ${votes === maxVotes && votes > 0 ? 'text-accent' : 'text-muted-foreground'}`}>
-                  {votes} vote{votes !== 1 ? 's' : ''}
-                </span>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
         {/* Session Leaderboard */}
         {sessionScores.length > 0 && (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '600ms' }}>
+            <div className="flex items-center justify-center gap-3 text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
               <Medal className="w-3.5 h-3.5" />
-              Session Leaderboard
+              Leaderboard
             </div>
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 gap-3">
               {sessionScores.map((score, index) => {
                 const player = players.find(p => p.id === score.player_id);
                 if (!player) return null;
@@ -122,36 +137,26 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                 return (
                   <div
                     key={score.id}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-xl border ${
+                    className={`flex items-center gap-4 px-6 py-4 rounded-[2rem] border ${
                       index === 0
-                        ? 'bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-amber-500/20'
-                        : index === 1
-                        ? 'bg-gradient-to-r from-gray-400/10 to-slate-400/10 border-gray-400/20'
-                        : index === 2
-                        ? 'bg-gradient-to-r from-orange-600/10 to-amber-600/10 border-orange-600/20'
-                        : 'bg-secondary/40 border-border/30'
+                        ? 'bg-primary text-primary-foreground accent-glow border-primary'
+                        : 'bg-white premium-shadow border-border/50'
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold ${
-                      index === 0
-                        ? 'bg-gradient-to-br from-amber-400 to-orange-500 text-white'
-                        : index === 1
-                        ? 'bg-gradient-to-br from-gray-300 to-slate-400 text-white'
-                        : index === 2
-                        ? 'bg-gradient-to-br from-orange-500 to-amber-600 text-white'
-                        : 'bg-primary/10 text-primary'
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${
+                      index === 0 ? 'bg-white text-primary' : 'bg-primary/10 text-primary'
                     }`}>
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-medium">{player.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {score.rounds_won} round{score.rounds_won !== 1 ? 's' : ''} won • {score.correct_votes} correct vote{score.correct_votes !== 1 ? 's' : ''}
+                      <p className="text-sm font-extrabold tracking-tight uppercase">{player.name}</p>
+                      <p className={`text-[10px] font-bold tracking-tight uppercase ${index === 0 ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
+                        {score.rounds_won} WON • {score.correct_votes} CORRECT
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-lg font-bold text-primary">{score.score}</p>
-                      <p className="text-xs text-muted-foreground">points</p>
+                      <p className={`text-xl font-black ${index === 0 ? 'text-primary-foreground' : 'text-primary'}`}>{score.score}</p>
+                      <p className={`text-[8px] font-extrabold uppercase tracking-widest ${index === 0 ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>PTS</p>
                     </div>
                   </div>
                 );
@@ -161,13 +166,16 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
         )}
 
         {isHost && (
-          <button
-            onClick={onPlayAgain}
-            className="w-full flex items-center justify-center gap-2 px-5 py-4 rounded-xl bg-primary text-primary-foreground font-semibold active:scale-[0.97] transition-transform"
-          >
-            <RotateCcw className="w-5 h-5" />
-            Play Again
-          </button>
+          <div className="py-12 animate-fade-in-up" style={{ animationDelay: '800ms' }}>
+            <button
+              onClick={onPlayAgain}
+              className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-3"
+            >
+              <RotateCcw className="w-5 h-5" />
+              PLAY AGAIN
+              <ArrowRight className="w-5 h-5" />
+            </button>
+          </div>
         )}
       </div>
     </div>

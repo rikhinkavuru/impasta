@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Vote, Check } from 'lucide-react';
+import { Vote, Check, ShieldCheck } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 
 interface VotingScreenProps {
@@ -21,65 +21,97 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
   const votedCount = players.filter(p => p.vote_for).length;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-6 animate-fade-in-up">
-        <div className="text-center space-y-1">
-          <Vote className="w-6 h-6 text-accent mx-auto mb-2" />
-          <h2 className="text-xl font-bold">Vote</h2>
-          <p className="text-xs text-muted-foreground">Who do you think is the imposter?</p>
+    <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
+      <div className="w-full max-w-md space-y-12 animate-fade-in-up">
+        
+        <div className="text-center space-y-4">
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Voting Phase</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-foreground uppercase">
+            {hasVoted ? 'VOTE CAST' : 'IDENTIFY THE IMPOSTER'}
+          </h2>
+          <p className="text-xs font-medium text-muted-foreground/60">Choose wisely. Every vote counts.</p>
         </div>
 
-        {/* Clues recap */}
-        <div className="space-y-1.5">
-          {players.map((player) => (
-            <button
-              key={player.id}
-              disabled={hasVoted || player.id === currentPlayer.id}
-              onClick={() => setSelectedId(player.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 text-left ${
-                hasVoted && currentPlayer.vote_for === player.id
-                  ? 'bg-accent/10 border-accent/30'
-                  : selectedId === player.id
-                  ? 'bg-primary/10 border-primary/30'
-                  : player.id === currentPlayer.id
-                  ? 'bg-secondary/20 border-border/20 opacity-50'
-                  : 'bg-secondary/40 border-border/30 hover:border-primary/20'
-              } ${!hasVoted && player.id !== currentPlayer.id ? 'active:scale-[0.97]' : ''}`}
-            >
-              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
-                {player.name[0].toUpperCase()}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium">
-                  {player.name}
-                  {player.id === currentPlayer.id && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
-                </p>
-                <p className="text-xs font-mono text-muted-foreground">"{player.clue}"</p>
-              </div>
-              {selectedId === player.id && !hasVoted && (
-                <Check className="w-5 h-5 text-primary" />
-              )}
-              {hasVoted && currentPlayer.vote_for === player.id && (
-                <Check className="w-5 h-5 text-accent" />
-              )}
-            </button>
-          ))}
+        {/* Voting Cards */}
+        <div className="grid grid-cols-1 gap-4">
+          {players.map((player) => {
+            const isSelf = player.id === currentPlayer.id;
+            const isSelected = selectedId === player.id;
+            const isVotedFor = hasVoted && currentPlayer.vote_for === player.id;
+            
+            return (
+              <button
+                key={player.id}
+                disabled={hasVoted || isSelf}
+                onClick={() => setSelectedId(player.id)}
+                className={`group relative flex flex-col items-start gap-4 p-6 rounded-[2.5rem] border-2 transition-all duration-300 text-left ${
+                  isVotedFor
+                    ? 'bg-primary border-primary accent-glow'
+                    : isSelected
+                    ? 'bg-primary border-primary accent-glow'
+                    : isSelf
+                    ? 'bg-white/40 border-border/20 opacity-50 cursor-not-allowed'
+                    : 'bg-white premium-shadow border-border/50 hover:border-primary/30 active:scale-[0.98]'
+                }`}
+              >
+                <div className="w-full flex items-center justify-between">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                    isSelected || isVotedFor ? 'bg-white text-primary' : 'bg-primary/10 text-primary'
+                  }`}>
+                    {player.name[0].toUpperCase()}
+                  </div>
+                  {(isSelected || isVotedFor) && (
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-lg">
+                      <Check className="w-4 h-4 text-primary" />
+                    </div>
+                  )}
+                  {isSelf && (
+                    <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                      <ShieldCheck className="w-4 h-4 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1">
+                  <p className={`text-lg font-extrabold tracking-tight uppercase ${
+                    isSelected || isVotedFor ? 'text-primary-foreground' : 'text-foreground'
+                  }`}>
+                    {player.name}
+                    {isSelf && <span className="ml-2 text-[10px] opacity-60">YOU</span>}
+                  </p>
+                  <p className={`text-sm font-extrabold tracking-tight uppercase italic ${
+                    isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                  }`}>
+                    "{player.clue}"
+                  </p>
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {!hasVoted && (
           <button
             onClick={handleVote}
             disabled={!selectedId}
-            className="w-full px-5 py-4 rounded-xl bg-accent text-accent-foreground font-semibold disabled:opacity-40 active:scale-[0.97] transition-transform"
+            className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2"
           >
-            Cast Vote
+            SUBMIT VOTE
+            <Vote className="w-5 h-5" />
           </button>
         )}
 
         {hasVoted && (
-          <p className="text-center text-sm text-muted-foreground animate-pulse">
-            Voted! Waiting for others... ({votedCount}/{players.length})
-          </p>
+          <div className="text-center py-6 space-y-4">
+            <div className="inline-flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '200ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '400ms' }} />
+            </div>
+            <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
+              WAITING FOR OTHERS ({votedCount}/{players.length})
+            </p>
+          </div>
         )}
       </div>
     </div>

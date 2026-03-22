@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageCircle, Check } from 'lucide-react';
+import { MessageCircle, Check, ArrowRight } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 
 interface CluePhaseScreenProps {
@@ -22,41 +22,51 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-6 animate-fade-in-up">
-        <div className="text-center space-y-1">
-          <MessageCircle className="w-6 h-6 text-primary mx-auto mb-2" />
-          <h2 className="text-xl font-bold">Clue Round</h2>
-          <p className="text-xs text-muted-foreground">Give a one-word clue about the secret word</p>
+    <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
+      <div className="w-full max-w-md space-y-12 animate-fade-in-up">
+        
+        <div className="text-center space-y-4">
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Clue Round</p>
+          <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
+            {isMyTurn ? 'IT\'S YOUR TURN' : `WAITING FOR ${activePlayer?.name.toUpperCase()}`}
+          </h2>
+          <p className="text-xs font-medium text-muted-foreground/60">One word only. Be subtle.</p>
         </div>
 
         {/* Turn list */}
-        <div className="space-y-1.5">
+        <div className="space-y-3">
           {sortedPlayers.map((player, i) => {
             const isActive = i === game.current_turn_index && !player.clue;
             const isDone = !!player.clue;
             return (
               <div
                 key={player.id}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-300 ${
+                className={`flex items-center gap-4 px-6 py-4 rounded-[2rem] transition-all duration-500 ${
                   isActive
-                    ? 'bg-primary/10 border-primary/30 animate-pulse-ring'
+                    ? 'bg-primary text-primary-foreground accent-glow scale-[1.02]'
                     : isDone
-                    ? 'bg-secondary/40 border-border/30'
-                    : 'bg-secondary/20 border-border/20'
+                    ? 'bg-white premium-shadow border border-border/30 opacity-60'
+                    : 'bg-white/40 border border-border/20'
                 }`}
+                style={{ animationDelay: `${i * 100}ms` }}
               >
-                <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold ${
-                  isActive ? 'bg-primary text-primary-foreground' : isDone ? 'bg-game-success/20 text-game-success' : 'bg-secondary text-muted-foreground'
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                  isActive ? 'bg-white text-primary' : isDone ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
                 }`}>
                   {isDone ? <Check className="w-4 h-4" /> : i + 1}
                 </div>
-                <span className={`text-sm font-medium flex-1 ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
-                  {player.name}
-                  {player.id === currentPlayer.id && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
-                </span>
+                
+                <div className="flex-1">
+                  <span className={`text-sm font-bold tracking-tight ${isActive ? 'text-primary-foreground' : 'text-foreground'}`}>
+                    {player.name}
+                    {player.id === currentPlayer.id && <span className="ml-2 text-[10px] opacity-60 uppercase">you</span>}
+                  </span>
+                </div>
+
                 {isDone && (
-                  <span className="text-sm font-mono font-medium text-foreground">"{player.clue}"</span>
+                  <span className="text-sm font-extrabold tracking-tight text-foreground uppercase">
+                    "{player.clue}"
+                  </span>
                 )}
               </div>
             );
@@ -65,39 +75,38 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
 
         {/* Input for current turn */}
         {isMyTurn && !hasSubmitted && (
-          <div className="space-y-3 animate-scale-in">
-            <p className="text-center text-sm font-semibold text-primary">It's your turn!</p>
-            <div className="flex gap-2">
+          <div className="space-y-6 animate-scale-in p-8 rounded-[3rem] bg-white premium-shadow border border-border/50">
+            <div className="space-y-4">
+              <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Your Clue</label>
               <input
                 type="text"
                 value={clue}
                 onChange={(e) => setClue(e.target.value.replace(/\s/g, ''))}
-                placeholder="One word only"
+                placeholder="TYPE WORD..."
                 maxLength={30}
                 autoFocus
-                className="flex-1 px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base font-mono"
+                className="w-full luxury-input text-3xl font-extrabold tracking-tighter"
               />
-              <button
-                onClick={handleSubmit}
-                disabled={!clue.trim()}
-                className="px-5 py-3 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-40 active:scale-[0.97] transition-transform"
-              >
-                Send
-              </button>
             </div>
+            <button
+              onClick={handleSubmit}
+              disabled={!clue.trim()}
+              className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2"
+            >
+              SEND CLUE
+              <ArrowRight className="w-5 h-5" />
+            </button>
           </div>
         )}
 
-        {hasSubmitted && (
-          <p className="text-center text-sm text-muted-foreground">
-            You said: <span className="font-mono font-medium text-foreground">"{currentPlayer.clue}"</span>
-          </p>
-        )}
-
-        {!isMyTurn && !hasSubmitted && (
-          <p className="text-center text-sm text-muted-foreground animate-pulse">
-            Waiting for {activePlayer?.name} to give a clue...
-          </p>
+        {hasSubmitted && !isMyTurn && (
+          <div className="text-center py-6 space-y-4">
+            <div className="inline-flex gap-1">
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '200ms' }} />
+              <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '400ms' }} />
+            </div>
+          </div>
         )}
       </div>
     </div>

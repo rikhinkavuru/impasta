@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Eye, EyeOff, Users, Zap } from 'lucide-react';
 import { preloadWordBank } from '@/lib/wordBank';
 
 interface HomeScreenProps {
@@ -30,109 +29,111 @@ export default function HomeScreen({ onCreateGame, onJoinGame, loading, error, c
   };
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-sm space-y-8 animate-fade-in-up">
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-background">
+      <div className="w-full max-w-md mx-auto space-y-16">
+        
         {/* Logo area */}
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-primary/10 mb-2">
-            <Eye className="w-8 h-8 text-primary" />
-          </div>
-          <h1 className="text-4xl font-bold tracking-tight text-balance leading-[1.1]">
+        <div className="text-center space-y-4 animate-fade-in-up">
+          <h1 className="text-fluid-h1 font-extrabold tracking-tighter text-foreground leading-none">
             Imposter
           </h1>
-          <p className="text-muted-foreground text-sm">
-            Find the imposter. Don't get caught.
+          <p className="text-sm font-medium tracking-[0.2em] uppercase text-muted-foreground/60">
+            Premium Party Experience
           </p>
         </div>
 
         {error && (
-          <div className="bg-game-danger/10 border border-game-danger/20 rounded-lg px-4 py-3 text-sm text-game-danger animate-scale-in">
+          <div className="bg-destructive/5 border border-destructive/10 rounded-2xl px-6 py-4 text-sm text-destructive animate-scale-in text-center">
             {error}
-            <button onClick={clearError} className="ml-2 underline text-xs opacity-70">dismiss</button>
+            <button onClick={clearError} className="ml-3 font-bold underline opacity-70">dismiss</button>
           </div>
         )}
 
         {mode === 'menu' && (
-          <div className="space-y-3 animate-fade-in-up" style={{ animationDelay: '100ms' }}>
+          <div className="flex flex-col gap-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
             <button
               onClick={() => setMode('create')}
-              className="w-full flex items-center gap-3 px-5 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base card-hover active:scale-[0.97] transition-transform"
+              className="pill-button bg-primary text-primary-foreground accent-glow"
             >
-              <Zap className="w-5 h-5" />
               Create Game
             </button>
             <button
               onClick={() => setMode('join')}
-              className="w-full flex items-center gap-3 px-5 py-4 rounded-xl bg-secondary text-secondary-foreground font-semibold text-base card-hover active:scale-[0.97] transition-transform"
+              className="pill-button bg-secondary text-secondary-foreground border border-border"
             >
-              <Users className="w-5 h-5" />
               Join Game
             </button>
           </div>
         )}
 
         {mode === 'create' && (
-          <div className="space-y-4 animate-fade-in-up">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Your Name</label>
+          <div className="space-y-12 animate-fade-in-up">
+            <div className="space-y-4">
+              <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Identity</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
+                placeholder="YOUR NAME"
                 maxLength={20}
                 autoFocus
-                className="w-full px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base"
+                className="w-full luxury-input"
               />
             </div>
-            <button
-              onClick={handleCreate}
-              disabled={loading || !name.trim()}
-              className="w-full px-5 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-40 active:scale-[0.97] transition-transform"
-            >
-              {loading ? 'Creating...' : 'Create Lobby'}
-            </button>
-            <button onClick={() => setMode('menu')} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors">
-              ← Back
-            </button>
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={handleCreate}
+                disabled={loading || !name.trim()}
+                className="pill-button bg-primary text-primary-foreground accent-glow"
+              >
+                {loading ? 'PREPARING...' : 'CREATE LOBBY'}
+              </button>
+              <button onClick={() => setMode('menu')} className="text-[10px] font-extrabold tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors uppercase">
+                ← Back
+              </button>
+            </div>
           </div>
         )}
 
         {mode === 'join' && (
-          <div className="space-y-4 animate-fade-in-up">
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Your Name</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Enter your name"
-                maxLength={20}
-                autoFocus
-                className="w-full px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base"
-              />
+          <div className="space-y-10 animate-fade-in-up">
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Identity</label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="YOUR NAME"
+                  maxLength={20}
+                  autoFocus
+                  className="w-full luxury-input"
+                />
+              </div>
+              <div className="space-y-4">
+                <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Game Code</label>
+                <input
+                  type="text"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.toUpperCase())}
+                  placeholder="CODE"
+                  maxLength={6}
+                  className="w-full luxury-input font-mono tracking-[0.5em]"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5 uppercase tracking-wider">Game Code</label>
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                placeholder="ABCDE"
-                maxLength={6}
-                className="w-full px-4 py-3 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-base font-mono tracking-[0.3em] text-center text-xl"
-              />
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={handleJoin}
+                disabled={loading || !name.trim() || !code.trim()}
+                className="pill-button bg-primary text-primary-foreground accent-glow"
+              >
+                {loading ? 'CONNECTING...' : 'JOIN LOBBY'}
+              </button>
+              <button onClick={() => setMode('menu')} className="text-[10px] font-extrabold tracking-[0.2em] text-muted-foreground hover:text-foreground transition-colors uppercase">
+                ← Back
+              </button>
             </div>
-            <button
-              onClick={handleJoin}
-              disabled={loading || !name.trim() || !code.trim()}
-              className="w-full px-5 py-3.5 rounded-xl bg-primary text-primary-foreground font-semibold disabled:opacity-40 active:scale-[0.97] transition-transform"
-            >
-              {loading ? 'Joining...' : 'Join Lobby'}
-            </button>
-            <button onClick={() => setMode('menu')} className="w-full text-sm text-muted-foreground hover:text-foreground transition-colors">
-              ← Back
-            </button>
           </div>
         )}
       </div>
