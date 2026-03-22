@@ -3,7 +3,6 @@ import { Copy, Check, Settings, Users, Play, ChevronDown, ChevronUp, Shuffle, Ha
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
 import { cn } from '@/lib/utils';
-import Leaderboard from './Leaderboard';
 
 interface LobbyScreenProps {
   game: Game;
@@ -129,16 +128,10 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                 {player.is_host && (
                   <span className="text-[10px] font-semibold text-accent uppercase tracking-wider">Host</span>
                 )}
-                <span className="text-sm font-bold text-muted-foreground">{player.score}</span>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Leaderboard */}
-        {players.some(p => p.score > 0) && (
-          <Leaderboard players={players} title="Current Standings" />
-        )}
 
         {/* Host Settings */}
         {isHost && (

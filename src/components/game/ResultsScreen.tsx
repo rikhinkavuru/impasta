@@ -1,6 +1,5 @@
 import { Trophy, Skull, RotateCcw } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
-import Leaderboard from './Leaderboard';
 
 interface ResultsScreenProps {
   game: Game;
@@ -106,9 +105,6 @@ export default function ResultsScreen({ game, players, currentPlayer, isHost, on
             );
           })}
         </div>
-
-        {/* Leaderboard */}
-        <Leaderboard players={players} title="Session Scores" />
 
         {isHost && (
           <button

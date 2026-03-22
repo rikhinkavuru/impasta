@@ -35,7 +35,6 @@ export interface Player {
   clue: string | null;
   vote_for: string | null;
   turn_order: number | null;
-  score: number;
 }
 
 export interface GameSettings {
@@ -58,68 +57,34 @@ export function useGame() {
   useEffect(() => {
     if (!game?.id) return;
 
-    console.log('🔗 Setting up realtime subscription for game:', game.id);
-    
     const gameChannel = supabase
       .channel(`game-${game.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
         (payload) => {
-          console.log('📢 Game update received:', payload);
           if (payload.new) setGame(payload.new as Game);
         }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
-        (payload) => {
-          console.log('👥 Players update received:', payload);
-          fetchPlayers(game.id); 
-        }
+        () => { fetchPlayers(game.id); }
       )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('✅ Realtime subscription active');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.log('❌ Realtime subscription error:', status);
-        }
-      });
+      .subscribe();
 
-    return () => { 
-      console.log('🔌 Cleaning up realtime subscription');
-      supabase.removeChannel(gameChannel); 
-    };
+    return () => { supabase.removeChannel(gameChannel); };
   }, [game?.id]);
 
   const fetchPlayers = async (gameId: string) => {
-    try {
-      console.log('📥 Fetching players for game:', gameId);
-      const { data, error } = await supabase
-        .from('players')
-        .select('*')
-        .eq('game_id', gameId)
-        .order('turn_order', { ascending: true, nullsFirst: false });
-      
-      if (error) {
-        console.error('❌ Fetch players error:', error);
-        return;
-      }
-      
-      if (data) {
-        const playersWithScores = data.map(p => ({ 
-          ...p, 
-          score: (p as { score?: number }).score || 0 
-        })) as Player[];
-        console.log('✅ Players fetched:', playersWithScores.map(p => ({ name: p.name, score: p.score })));
-        setPlayers(playersWithScores);
-      }
-    } catch (err) {
-      console.error('❌ Unexpected fetch error:', err);
-    }
+    const { data } = await supabase
+      .from('players')
+      .select('*')
+      .eq('game_id', gameId)
+      .order('turn_order', { ascending: true, nullsFirst: false });
+    if (data) setPlayers(data as Player[]);
   };
 
   const createGame = useCallback(async (hostName: string) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('🎮 Creating game with host:', hostName);
       const code = generateGameCode();
       const { data: gameData, error: gameError } = await supabase
         .from('games')
@@ -139,10 +104,8 @@ export function useGame() {
 
       setGame({ ...gameData, host_player_id: playerData.id } as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([{ ...playerData, score: 0 } as Player]);
-      console.log('✅ Game created successfully');
+      setPlayers([playerData as Player]);
     } catch (e: unknown) {
-      console.error('❌ Create game error:', e);
       setError(getErrorMessage(e));
     } finally {
       setLoading(false);
@@ -254,108 +217,17 @@ export function useGame() {
     }
   }, [game, currentPlayerId, players]);
 
-  const calculateAndUpdateScores = useCallback(async () => {
-    if (!game || !players.length) return;
-
-    const imposters = players.filter(p => p.is_imposter);
-    const imposterIds = new Set(imposters.map(p => p.id));
-
-    // Count votes
-    const voteCounts: Record<string, number> = {};
-    players.forEach(p => {
-      if (p.vote_for) {
-        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
-      }
-    });
-
-    const maxVotes = Math.max(...Object.values(voteCounts), 0);
-    const mostVotedId = Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0];
-
-    // Determine outcome
-    const noImposters = imposters.length === 0;
-    const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
-
-    console.log('🏆 Game Result:', { 
-      civiliansWin: imposterCaught, 
-      impostersWin: !imposterCaught && !noImposters,
-      noImposters,
-      imposterNames: imposters.map(p => p.name)
-    });
-
-    // Calculate score changes
-    const scoreUpdates: Record<string, number> = {};
-    
-    if (noImposters) {
-      // No imposters - everyone gets 1 point
-      players.forEach(p => {
-        scoreUpdates[p.id] = 1;
-      });
-    } else if (imposterCaught) {
-      // Civilians win - civilians get 2 points, imposters get 0
-      players.forEach(p => {
-        if (p.is_imposter) {
-          scoreUpdates[p.id] = 0;
-        } else {
-          scoreUpdates[p.id] = 2;
-        }
-      });
-    } else {
-      // Imposters win - imposters get 2 points, civilians get 0
-      players.forEach(p => {
-        if (p.is_imposter) {
-          scoreUpdates[p.id] = 2;
-        } else {
-          scoreUpdates[p.id] = 0;
-        }
-      });
-    }
-
-    // Bonus for correct voting
-    players.forEach(p => {
-      if (p.vote_for && imposterIds.has(p.vote_for)) {
-        scoreUpdates[p.id] = (scoreUpdates[p.id] || 0) + 1;
-      }
-    });
-
-    console.log('Score updates calculated:', scoreUpdates);
-
-    // Update local state immediately for responsive UI
-    const updatedPlayers = players.map(p => ({
-      ...p,
-      score: (p.score || 0) + (scoreUpdates[p.id] || 0)
-    }));
-    
-    console.log('📊 Final Scores:', updatedPlayers.map(p => ({ 
-      name: p.name, 
-      oldScore: players.find(pl => pl.id === p.id)?.score || 0, 
-      newScore: p.score, 
-      change: scoreUpdates[p.id] || 0 
-    })));
-    setPlayers(updatedPlayers);
-
-    // For Lovable Cloud, work with local state only
-    console.log('✅ Leaderboard updated!');
-  }, [game, players]);
-
   const submitVote = useCallback(async (votedPlayerId: string) => {
-    console.log('🗳️ submitVote called for:', votedPlayerId);
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
 
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, vote_for: votedPlayerId } : p);
     const allVoted = updatedPlayers.every(p => p.vote_for);
 
-    console.log('📊 All voted?', allVoted, 'Players:', updatedPlayers.map(p => ({ name: p.name, vote_for: p.vote_for })));
-
     if (allVoted) {
-      console.log('🎯 All votes in, calling scoring function...');
       await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
-      // Calculate and update scores when game ends
-      await calculateAndUpdateScores();
-    } else {
-      console.log('⏳ Still waiting for more votes');
     }
-  }, [game, currentPlayerId, players, calculateAndUpdateScores]);
+  }, [game, currentPlayerId, players]);
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
