@@ -26,6 +26,7 @@ export type Database = {
           imposter_count: number
           imposter_min: number
           imposter_max: number
+          imposter_random: boolean
           phase: string
           word: string | null
         }
@@ -40,6 +41,7 @@ export type Database = {
           imposter_count?: number
           imposter_min?: number
           imposter_max?: number
+          imposter_random?: boolean
           phase?: string
           word?: string | null
         }
@@ -54,6 +56,7 @@ export type Database = {
           imposter_count?: number
           imposter_min?: number
           imposter_max?: number
+          imposter_random?: boolean
           phase?: string
           word?: string | null
         }

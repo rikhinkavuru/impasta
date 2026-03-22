@@ -20,9 +20,10 @@ export interface Game {
   current_turn_index: number;
   difficulty: Difficulty;
   imposter_count: number;
-  /** Inclusive range; actual count is chosen at random when the round starts (clamped to player count). */
+  /** When true, count is rolled between min and max each round; when false, min and max are equal = fixed count. */
   imposter_min: number;
   imposter_max: number;
+  imposter_random?: boolean;
 }
 
 export interface Player {
@@ -38,6 +39,7 @@ export interface Player {
 
 export interface GameSettings {
   difficulty: Difficulty;
+  imposterRandom: boolean;
   imposterMin: number;
   imposterMax: number;
 }
@@ -146,6 +148,7 @@ export function useGame() {
       imposter_count: settings.imposterMax,
       imposter_min: settings.imposterMin,
       imposter_max: settings.imposterMax,
+      imposter_random: settings.imposterRandom,
     }).eq('id', game.id);
   }, [game, isHost]);
 
@@ -163,14 +166,16 @@ export function useGame() {
     const imposterPickOrder = shuffleArray(playerIds);
     const clueOrder = shuffleArray(playerIds);
 
-    // Random count within host range [min, max], clamped to player count
     const n = players.length;
     const rawMin = game.imposter_min ?? (game.imposter_count < 0 ? 0 : game.imposter_count);
     const rawMax = game.imposter_max ?? (game.imposter_count < 0 ? n : game.imposter_count);
     const minImposters = Math.max(0, Math.min(rawMin, n));
     const maxImposters = Math.max(minImposters, Math.min(rawMax, n));
-    const numImposters =
-      minImposters + Math.floor(Math.random() * (maxImposters - minImposters + 1));
+    const useRandom =
+      game.imposter_random ?? minImposters !== maxImposters;
+    const numImposters = useRandom
+      ? minImposters + Math.floor(Math.random() * (maxImposters - minImposters + 1))
+      : minImposters;
 
     const imposterIds = new Set(imposterPickOrder.slice(0, numImposters));
 
