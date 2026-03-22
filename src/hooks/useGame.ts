@@ -206,11 +206,12 @@ export function useGame() {
     };
 
     setGame(updatedGame);
-      civiliansWin: imposterCaught, 
-      impostersWin: !imposterCaught && !noImposters,
-      noImposters,
-      imposterNames: imposters.map(p => p.name)
-    });
+      console.log('🏆 Game Result:', { 
+        civiliansWin: imposterCaught, 
+        impostersWin: !imposterCaught && !noImposters,
+        noImposters,
+        imposterNames: imposters.map(p => p.name)
+      });
 
     // Calculate score changes
     const scoreUpdates: Record<string, number> = {};
