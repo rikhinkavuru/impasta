@@ -165,8 +165,8 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
           </div>
         )}
 
-        {isHost && (
-          <div className="py-12 animate-fade-in-up" style={{ animationDelay: '800ms' }}>
+        <div className="py-12 animate-fade-in-up" style={{ animationDelay: '800ms' }}>
+          {isHost ? (
             <button
               onClick={onPlayAgain}
               className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-3"
@@ -175,8 +175,19 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
               PLAY AGAIN
               <ArrowRight className="w-5 h-5" />
             </button>
-          </div>
-        )}
+          ) : (
+            <div className="text-center space-y-4">
+              <div className="inline-flex gap-1">
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '200ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '400ms' }} />
+              </div>
+              <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
+                Waiting for host to play again
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
