@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
 
@@ -54,17 +55,64 @@ export function useGame() {
   const currentPlayer = players.find(p => p.id === currentPlayerId) || null;
   const isHost = currentPlayer?.is_host ?? false;
 
-  // Mock fetchPlayers for Lovable Cloud (simulates loading)
-  const fetchPlayers = async (gameId: string) => {
-    console.log('� Mock fetching players for game:', gameId);
-    // In Lovable Cloud, players are managed locally
-    // This function exists for compatibility but doesn't make API calls
-  };
+  useEffect(() => {
+    if (!game?.id) return;
 
-  // Mock database operations for Lovable Cloud
-  const mockUpdate = async (updates: any) => {
-    console.log('🔄 Mock update:', updates);
-    return Promise.resolve();
+    console.log('🔗 Setting up realtime subscription for game:', game.id);
+    
+    const gameChannel = supabase
+      .channel(`game-${game.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
+        (payload) => {
+          console.log('📢 Game update received:', payload);
+          if (payload.new) setGame(payload.new as Game);
+        }
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
+        (payload) => {
+          console.log('👥 Players update received:', payload);
+          fetchPlayers(game.id); 
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.log('❌ Realtime subscription error:', status);
+        }
+      });
+
+    return () => { 
+      console.log('🔌 Cleaning up realtime subscription');
+      supabase.removeChannel(gameChannel); 
+    };
+  }, [game?.id]);
+
+  const fetchPlayers = async (gameId: string) => {
+    try {
+      console.log('📥 Fetching players for game:', gameId);
+      const { data, error } = await supabase
+        .from('players')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('turn_order', { ascending: true, nullsFirst: false });
+      
+      if (error) {
+        console.error('❌ Fetch players error:', error);
+        return;
+      }
+      
+      if (data) {
+        const playersWithScores = data.map(p => ({ 
+          ...p, 
+          score: (p as { score?: number }).score || 0 
+        })) as Player[];
+        console.log('✅ Players fetched:', playersWithScores.map(p => ({ name: p.name, score: p.score })));
+        setPlayers(playersWithScores);
+      }
+    } catch (err) {
+      console.error('❌ Unexpected fetch error:', err);
+    }
   };
 
   const createGame = useCallback(async (hostName: string) => {
@@ -73,38 +121,25 @@ export function useGame() {
     try {
       console.log('🎮 Creating game with host:', hostName);
       const code = generateGameCode();
-      
-      // Mock game creation for Lovable Cloud
-      const gameData = {
-        id: `mock-${Date.now()}`,
-        code,
-        host_player_id: `mock-host-${Date.now()}`,
-        phase: 'lobby' as GamePhase,
-        word: null,
-        imposter_clue: null,
-        current_turn_index: 0,
-        difficulty: 'medium' as Difficulty,
-        imposter_count: 1,
-        imposter_min: 1,
-        imposter_max: 1,
-        imposter_random: false,
-      };
+      const { data: gameData, error: gameError } = await supabase
+        .from('games')
+        .insert({ code, phase: 'lobby' })
+        .select()
+        .single();
+      if (gameError) throw gameError;
 
-      const playerData = {
-        id: `mock-player-${Date.now()}`,
-        game_id: gameData.id,
-        name: hostName,
-        is_host: true,
-        is_imposter: false,
-        clue: null,
-        vote_for: null,
-        turn_order: 0,
-        score: 0,
-      };
+      const { data: playerData, error: playerError } = await supabase
+        .from('players')
+        .insert({ game_id: gameData.id, name: hostName, is_host: true })
+        .select()
+        .single();
+      if (playerError) throw playerError;
 
-      setGame(gameData as Game);
+      await supabase.from('games').update({ host_player_id: playerData.id }).eq('id', gameData.id);
+
+      setGame({ ...gameData, host_player_id: playerData.id } as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([playerData as Player]);
+      setPlayers([{ ...playerData, score: 0 } as Player]);
       console.log('✅ Game created successfully');
     } catch (e: unknown) {
       console.error('❌ Create game error:', e);
@@ -118,42 +153,25 @@ export function useGame() {
     setLoading(true);
     setError(null);
     try {
-      console.log('🎮 Joining game:', code, playerName);
-      
-      // Mock game joining for Lovable Cloud
-      const gameData = {
-        id: `mock-${Date.now()}`,
-        code,
-        host_player_id: `mock-host-${Date.now()}`,
-        phase: 'lobby' as GamePhase,
-        word: null,
-        imposter_clue: null,
-        current_turn_index: 0,
-        difficulty: 'medium' as Difficulty,
-        imposter_count: 1,
-        imposter_min: 1,
-        imposter_max: 1,
-        imposter_random: false,
-      };
+      const { data: gameData, error: gameError } = await supabase
+        .from('games')
+        .select('*')
+        .eq('code', code.toUpperCase())
+        .single();
+      if (gameError) throw new Error('Game not found. Check the code and try again.');
+      if (gameData.phase !== 'lobby') throw new Error('Game already in progress.');
 
-      const playerData = {
-        id: `mock-player-${Date.now()}`,
-        game_id: gameData.id,
-        name: playerName,
-        is_host: false,
-        is_imposter: false,
-        clue: null,
-        vote_for: null,
-        turn_order: 0,
-        score: 0,
-      };
+      const { data: playerData, error: playerError } = await supabase
+        .from('players')
+        .insert({ game_id: gameData.id, name: playerName })
+        .select()
+        .single();
+      if (playerError) throw playerError;
 
       setGame(gameData as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([playerData as Player]);
-      console.log('✅ Joined game successfully');
+      await fetchPlayers(gameData.id);
     } catch (e: unknown) {
-      console.error('❌ Join game error:', e);
       setError(getErrorMessage(e));
     } finally {
       setLoading(false);
@@ -162,56 +180,107 @@ export function useGame() {
 
   const updateSettings = useCallback(async (settings: GameSettings) => {
     if (!game || !isHost) return;
-    console.log('⚙️ Updating settings:', settings);
-    await mockUpdate(settings);
+    await supabase.from('games').update({
+      difficulty: settings.difficulty,
+      imposter_count: settings.imposterMax,
+      imposter_min: settings.imposterMin,
+      imposter_max: settings.imposterMax,
+      imposter_random: settings.imposterRandom,
+    }).eq('id', game.id);
   }, [game, isHost]);
 
   const startGame = useCallback(async (customWord?: string, customClue?: string) => {
     if (!game || !isHost) return;
 
-    console.log('🎲 Starting game...');
-    
-    // Mock word selection
+    const difficulty = (game.difficulty || 'medium') as Difficulty;
     const wordPair = customWord && customClue
       ? { word: customWord, imposterClue: normalizeImposterClueToOneWord(customClue) }
-      : await getRandomWordPair('medium');
+      : await getRandomWordPair(difficulty);
 
     const playerIds = players.map(p => p.id);
+    // Imposter selection and clue order must be independent shuffles, or imposters
+    // would always get the first turn_order slots (0..numImposters-1).
     const imposterPickOrder = shuffleArray(playerIds);
     const clueOrder = shuffleArray(playerIds);
 
     const n = players.length;
-    const numImposters = 1; // Fixed for simplicity
+    const rawMin = game.imposter_min ?? (game.imposter_count < 0 ? 0 : game.imposter_count);
+    const rawMax = game.imposter_max ?? (game.imposter_count < 0 ? n : game.imposter_count);
+    const minImposters = Math.max(0, Math.min(rawMin, n));
+    const maxImposters = Math.max(minImposters, Math.min(rawMax, n));
+    const useRandom =
+      game.imposter_random ?? minImposters !== maxImposters;
+    const numImposters = useRandom
+      ? minImposters + Math.floor(Math.random() * (maxImposters - minImposters + 1))
+      : minImposters;
 
     const imposterIds = new Set(imposterPickOrder.slice(0, numImposters));
 
-    // Update players with roles and turn order
-    const updatedPlayers = players.map((player, index) => ({
-      ...player,
-      turn_order: clueOrder[index],
-      is_imposter: imposterIds.has(clueOrder[index]),
-      clue: null,
-      vote_for: null,
-    }));
+    for (let i = 0; i < clueOrder.length; i++) {
+      await supabase.from('players').update({
+        turn_order: i,
+        is_imposter: imposterIds.has(clueOrder[i]),
+        clue: null,
+        vote_for: null,
+      }).eq('id', clueOrder[i]);
+    }
 
-    setPlayers(updatedPlayers);
-
-    // Update game state
-    const updatedGame = {
-      ...game,
-      phase: 'role_reveal' as GamePhase,
+    await supabase.from('games').update({
+      phase: 'role_reveal',
       word: wordPair.word,
       imposter_clue: wordPair.imposterClue,
       current_turn_index: 0,
-    };
+    }).eq('id', game.id);
+  }, [game, isHost, players]);
 
-    setGame(updatedGame);
-      console.log('🏆 Game Result:', { 
-        civiliansWin: imposterCaught, 
-        impostersWin: !imposterCaught && !noImposters,
-        noImposters,
-        imposterNames: imposters.map(p => p.name)
-      });
+  const proceedToClues = useCallback(async () => {
+    if (!game || !isHost) return;
+    await supabase.from('games').update({ phase: 'clue_giving' }).eq('id', game.id);
+  }, [game, isHost]);
+
+  const submitClue = useCallback(async (clue: string) => {
+    if (!game || !currentPlayerId) return;
+    await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
+
+    const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, clue } : p);
+    const allSubmitted = updatedPlayers.every(p => p.clue);
+
+    if (allSubmitted) {
+      await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
+    } else {
+      await supabase.from('games').update({
+        current_turn_index: (game.current_turn_index || 0) + 1
+      }).eq('id', game.id);
+    }
+  }, [game, currentPlayerId, players]);
+
+  const calculateAndUpdateScores = useCallback(async () => {
+    if (!game || !players.length) return;
+
+    const imposters = players.filter(p => p.is_imposter);
+    const imposterIds = new Set(imposters.map(p => p.id));
+
+    // Count votes
+    const voteCounts: Record<string, number> = {};
+    players.forEach(p => {
+      if (p.vote_for) {
+        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+      }
+    });
+
+    const maxVotes = Math.max(...Object.values(voteCounts), 0);
+    const mostVotedId = Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0];
+
+    // Determine outcome
+    const noImposters = imposters.length === 0;
+    const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
+
+    console.log('🏆 Game Result:', { 
+      civiliansWin: imposterCaught, 
+      impostersWin: !imposterCaught && !noImposters,
+      noImposters,
+      imposterNames: imposters.map(p => p.name)
+    });
 
     // Calculate score changes
     const scoreUpdates: Record<string, number> = {};
@@ -251,18 +320,18 @@ export function useGame() {
     console.log('Score updates calculated:', scoreUpdates);
 
     // Update local state immediately for responsive UI
-    const playersWithNewScores = players.map(p => ({
+    const updatedPlayers = players.map(p => ({
       ...p,
       score: (p.score || 0) + (scoreUpdates[p.id] || 0)
     }));
     
-    console.log('📊 Final Scores:', playersWithNewScores.map(p => ({ 
+    console.log('📊 Final Scores:', updatedPlayers.map(p => ({ 
       name: p.name, 
       oldScore: players.find(pl => pl.id === p.id)?.score || 0, 
       newScore: p.score, 
       change: scoreUpdates[p.id] || 0 
     })));
-    setPlayers(playersWithNewScores);
+    setPlayers(updatedPlayers);
 
     // For Lovable Cloud, work with local state only
     console.log('✅ Leaderboard updated!');
