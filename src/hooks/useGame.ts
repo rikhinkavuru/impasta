@@ -66,7 +66,9 @@ export function useGame() {
         }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
-        () => { fetchPlayers(game.id); }
+        () => { 
+          fetchPlayers(game.id); 
+        }
       )
       .subscribe();
 
@@ -245,31 +247,32 @@ export function useGame() {
     const noImposters = imposters.length === 0;
     const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
 
-    // Calculate score changes (store in local state for now)
-    const updatedPlayers = [...players];
+    console.log('Scoring debug:', { noImposters, imposterCaught, imposters: imposters.map(p => p.name), mostVotedId, voteCounts });
+
+    // Calculate score changes
     const scoreUpdates: Record<string, number> = {};
     
     if (noImposters) {
-      // No imposters - everyone gets a small bonus
+      // No imposters - everyone gets 1 point
       players.forEach(p => {
-        scoreUpdates[p.id] = 5;
+        scoreUpdates[p.id] = 1;
       });
     } else if (imposterCaught) {
-      // Civilians win - civilians get points, imposters lose points
+      // Civilians win - civilians get 2 points, imposters get 0
       players.forEach(p => {
         if (p.is_imposter) {
-          scoreUpdates[p.id] = -10;
+          scoreUpdates[p.id] = 0;
         } else {
-          scoreUpdates[p.id] = 15;
+          scoreUpdates[p.id] = 2;
         }
       });
     } else {
-      // Imposters win - imposters get points, civilians lose points
+      // Imposters win - imposters get 2 points, civilians get 0
       players.forEach(p => {
         if (p.is_imposter) {
-          scoreUpdates[p.id] = 20;
+          scoreUpdates[p.id] = 2;
         } else {
-          scoreUpdates[p.id] = -5;
+          scoreUpdates[p.id] = 0;
         }
       });
     }
@@ -277,31 +280,37 @@ export function useGame() {
     // Bonus for correct voting
     players.forEach(p => {
       if (p.vote_for && imposterIds.has(p.vote_for)) {
-        scoreUpdates[p.id] = (scoreUpdates[p.id] || 0) + 5;
+        scoreUpdates[p.id] = (scoreUpdates[p.id] || 0) + 1;
       }
     });
 
-    // Update local player scores
-    const playersWithNewScores = updatedPlayers.map(p => ({
+    console.log('Score updates calculated:', scoreUpdates);
+
+    // Update local state immediately for responsive UI
+    const updatedPlayers = players.map(p => ({
       ...p,
       score: (p.score || 0) + (scoreUpdates[p.id] || 0)
     }));
     
-    setPlayers(playersWithNewScores);
+    console.log('Players with new scores:', updatedPlayers.map(p => ({ name: p.name, score: p.score })));
+    setPlayers(updatedPlayers);
 
-    // Try to update database if score column exists (ignore errors for now)
+    // Try to update database in background (don't wait for it)
     for (const [playerId, scoreChange] of Object.entries(scoreUpdates)) {
       const player = players.find(p => p.id === playerId);
       if (player) {
-        try {
-          await supabase
-            .from('players')
-            .update({ score: (player.score || 0) + scoreChange } as any)
-            .eq('id', playerId);
-        } catch (error) {
-          // Ignore database errors for now - scores are tracked locally
-          console.log('Score update failed (column may not exist yet):', error);
-        }
+        const newScore = (player.score || 0) + scoreChange;
+        
+        // Try database update but don't block on it
+        supabase
+          .from('players')
+          .update({ score: newScore } as any)
+          .eq('id', playerId)
+          .then(({ error }) => {
+            if (error) {
+              console.log('Database score update failed (column may not exist):', error);
+            }
+          });
       }
     }
   }, [game, players]);
