@@ -10,8 +10,9 @@ interface ResultsScreenProps {
 }
 
 export default function ResultsScreen({ game, players, currentPlayer, isHost, onPlayAgain }: ResultsScreenProps) {
-  const imposter = players.find(p => p.is_imposter);
-  
+  const imposters = players.filter(p => p.is_imposter);
+  const imposterIds = new Set(imposters.map(p => p.id));
+
   // Count votes
   const voteCounts: Record<string, number> = {};
   players.forEach(p => {
@@ -22,7 +23,24 @@ export default function ResultsScreen({ game, players, currentPlayer, isHost, on
 
   const maxVotes = Math.max(...Object.values(voteCounts), 0);
   const mostVotedId = Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0];
-  const imposterCaught = mostVotedId === imposter?.id;
+
+  // Determine outcome
+  const noImposters = imposters.length === 0;
+  const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
+
+  const resultTitle = noImposters
+    ? 'No Imposters!'
+    : imposterCaught
+    ? 'Civilians Win!'
+    : imposters.length > 1
+    ? 'Imposters Win!'
+    : 'Imposter Wins!';
+
+  const resultSubtitle = noImposters
+    ? 'There were no imposters this round.'
+    : imposterCaught
+    ? `${imposters.map(p => p.name).join(', ')} ${imposters.length > 1 ? 'were' : 'was'} caught!`
+    : `${imposters.map(p => p.name).join(', ')} got away with it!`;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -30,23 +48,18 @@ export default function ResultsScreen({ game, players, currentPlayer, isHost, on
         {/* Result banner */}
         <div className="text-center space-y-4">
           <div className={`inline-flex items-center justify-center w-20 h-20 rounded-2xl ${
-            imposterCaught ? 'bg-game-success/15' : 'bg-game-danger/15'
+            imposterCaught || noImposters ? 'bg-game-success/15' : 'bg-game-danger/15'
           }`}>
-            {imposterCaught 
+            {imposterCaught || noImposters
               ? <Trophy className="w-10 h-10 text-game-success" />
               : <Skull className="w-10 h-10 text-game-danger" />
             }
           </div>
           <div>
-            <h2 className={`text-2xl font-bold ${imposterCaught ? 'text-game-success' : 'text-game-danger'}`}>
-              {imposterCaught ? 'Civilians Win!' : 'Imposter Wins!'}
+            <h2 className={`text-2xl font-bold ${imposterCaught || noImposters ? 'text-game-success' : 'text-game-danger'}`}>
+              {resultTitle}
             </h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {imposterCaught
-                ? `${imposter?.name} was caught!`
-                : `${imposter?.name} got away with it!`
-              }
-            </p>
+            <p className="text-sm text-muted-foreground mt-1">{resultSubtitle}</p>
           </div>
         </div>
 
@@ -54,7 +67,7 @@ export default function ResultsScreen({ game, players, currentPlayer, isHost, on
         <div className="px-5 py-4 rounded-2xl bg-secondary/60 border border-border/50 text-center space-y-1">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">The word was</p>
           <p className="text-xl font-bold">{game.word}</p>
-          <p className="text-xs text-muted-foreground">Imposter's clue: "{game.imposter_clue}"</p>
+          <p className="text-xs text-muted-foreground">Imposter clue: "{game.imposter_clue}"</p>
         </div>
 
         {/* Vote breakdown */}

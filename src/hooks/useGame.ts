@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
-import { getRandomWordPair } from '@/lib/wordBank';
+import { getRandomWordPair, type Difficulty } from '@/lib/wordBank';
 
 export type GamePhase = 'lobby' | 'role_reveal' | 'clue_giving' | 'voting' | 'results';
 
@@ -13,6 +13,8 @@ export interface Game {
   word: string | null;
   imposter_clue: string | null;
   current_turn_index: number;
+  difficulty: Difficulty;
+  imposter_count: number;
 }
 
 export interface Player {
@@ -26,6 +28,11 @@ export interface Player {
   turn_order: number | null;
 }
 
+export interface GameSettings {
+  difficulty: Difficulty;
+  imposterCount: number; // -1 means random
+}
+
 export function useGame() {
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -36,7 +43,6 @@ export function useGame() {
   const currentPlayer = players.find(p => p.id === currentPlayerId) || null;
   const isHost = currentPlayer?.is_host ?? false;
 
-  // Subscribe to game and player changes
   useEffect(() => {
     if (!game?.id) return;
 
@@ -48,10 +54,7 @@ export function useGame() {
         }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
-        () => {
-          // Refetch all players on any change
-          fetchPlayers(game.id);
-        }
+        () => { fetchPlayers(game.id); }
       )
       .subscribe();
 
@@ -127,21 +130,38 @@ export function useGame() {
     }
   }, []);
 
+  const updateSettings = useCallback(async (settings: GameSettings) => {
+    if (!game || !isHost) return;
+    await supabase.from('games').update({
+      difficulty: settings.difficulty,
+      imposter_count: settings.imposterCount,
+    }).eq('id', game.id);
+  }, [game, isHost]);
+
   const startGame = useCallback(async (customWord?: string, customClue?: string) => {
     if (!game || !isHost) return;
-    
+
+    const difficulty = (game.difficulty || 'medium') as Difficulty;
     const wordPair = customWord && customClue
       ? { word: customWord, imposterClue: customClue }
-      : getRandomWordPair();
+      : getRandomWordPair(difficulty);
 
-    // Assign turn order and pick imposter
     const shuffledIds = shuffleArray(players.map(p => p.id));
-    const imposterId = shuffledIds[Math.floor(Math.random() * shuffledIds.length)];
+
+    // Determine number of imposters
+    let numImposters = game.imposter_count ?? 1;
+    if (numImposters === -1) {
+      // Random: 0 to players.length
+      numImposters = Math.floor(Math.random() * (players.length + 1));
+    }
+    numImposters = Math.min(numImposters, players.length);
+
+    const imposterIds = new Set(shuffledIds.slice(0, numImposters));
 
     for (let i = 0; i < shuffledIds.length; i++) {
       await supabase.from('players').update({
         turn_order: i,
-        is_imposter: shuffledIds[i] === imposterId,
+        is_imposter: imposterIds.has(shuffledIds[i]),
         clue: null,
         vote_for: null,
       }).eq('id', shuffledIds[i]);
@@ -164,10 +184,9 @@ export function useGame() {
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
 
-    // Check if all players have submitted clues
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, clue } : p);
     const allSubmitted = updatedPlayers.every(p => p.clue);
-    
+
     if (allSubmitted) {
       await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
     } else {
@@ -181,7 +200,6 @@ export function useGame() {
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
 
-    // Check if all players have voted
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, vote_for: votedPlayerId } : p);
     const allVoted = updatedPlayers.every(p => p.vote_for);
 
@@ -192,7 +210,6 @@ export function useGame() {
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
-    // Reset all players
     for (const p of players) {
       await supabase.from('players').update({
         is_imposter: false,
@@ -212,6 +229,6 @@ export function useGame() {
   return {
     game, players, currentPlayer, currentPlayerId, isHost, loading, error,
     createGame, joinGame, startGame, proceedToClues, submitClue, submitVote, playAgain,
-    setError,
+    updateSettings, setError,
   };
 }
