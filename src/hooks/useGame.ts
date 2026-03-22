@@ -227,7 +227,11 @@ export function useGame() {
   }, [game, currentPlayerId, players]);
 
   const calculateAndUpdateScores = useCallback(async () => {
-    if (!game || !players.length) return;
+    console.log('🎯 calculateAndUpdateScores called!');
+    if (!game || !players.length) {
+      console.log('❌ No game or players');
+      return;
+    }
 
     const imposters = players.filter(p => p.is_imposter);
     const imposterIds = new Set(imposters.map(p => p.id));
@@ -292,7 +296,7 @@ export function useGame() {
       score: (p.score || 0) + (scoreUpdates[p.id] || 0)
     }));
     
-    console.log('Players with new scores:', updatedPlayers.map(p => ({ name: p.name, score: p.score })));
+    console.log('Players with new scores:', updatedPlayers.map(p => ({ name: p.name, oldScore: players.find(pl => pl.id === p.id)?.score || 0, newScore: p.score, change: scoreUpdates[p.id] || 0 })));
     setPlayers(updatedPlayers);
 
     // Try to update database in background (don't wait for it)
@@ -316,16 +320,22 @@ export function useGame() {
   }, [game, players]);
 
   const submitVote = useCallback(async (votedPlayerId: string) => {
+    console.log('🗳️ submitVote called for:', votedPlayerId);
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
 
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, vote_for: votedPlayerId } : p);
     const allVoted = updatedPlayers.every(p => p.vote_for);
 
+    console.log('📊 All voted?', allVoted, 'Players:', updatedPlayers.map(p => ({ name: p.name, vote_for: p.vote_for })));
+
     if (allVoted) {
+      console.log('🎯 All votes in, calling scoring function...');
       await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
       // Calculate and update scores when game ends
       await calculateAndUpdateScores();
+    } else {
+      console.log('⏳ Still waiting for more votes');
     }
   }, [game, currentPlayerId, players, calculateAndUpdateScores]);
 
