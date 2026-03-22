@@ -121,6 +121,51 @@ export type Database = {
           },
         ]
       }
+      session_scores: {
+        Row: {
+          created_at: string
+          game_id: string
+          id: string
+          player_id: string
+          score: number
+          rounds_won: number
+          correct_votes: number
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          id?: string
+          player_id: string
+          score?: number
+          rounds_won?: number
+          correct_votes?: number
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          id?: string
+          player_id?: string
+          score?: number
+          rounds_won?: number
+          correct_votes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "session_scores_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "session_scores_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

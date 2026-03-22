@@ -8,7 +8,7 @@ import ResultsScreen from '@/components/game/ResultsScreen';
 
 export default function Index() {
   const {
-    game, players, currentPlayer, isHost, loading, error,
+    game, players, sessionScores, currentPlayer, isHost, loading, error,
     createGame, joinGame, startGame, proceedToClues, submitClue, submitVote, playAgain,
     updateSettings, setError,
   } = useGame();
@@ -35,7 +35,7 @@ export default function Index() {
     case 'voting':
       return <VotingScreen game={game} players={players} currentPlayer={currentPlayer} onVote={submitVote} />;
     case 'results':
-      return <ResultsScreen game={game} players={players} currentPlayer={currentPlayer} isHost={isHost} onPlayAgain={playAgain} />;
+      return <ResultsScreen game={game} players={players} sessionScores={sessionScores} currentPlayer={currentPlayer} isHost={isHost} onPlayAgain={playAgain} />;
     default:
       return null;
   }

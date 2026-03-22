@@ -37,6 +37,16 @@ export interface Player {
   turn_order: number | null;
 }
 
+export interface SessionScore {
+  id: string;
+  game_id: string;
+  player_id: string;
+  score: number;
+  rounds_won: number;
+  correct_votes: number;
+  created_at: string;
+}
+
 export interface GameSettings {
   difficulty: Difficulty;
   imposterRandom: boolean;
@@ -47,6 +57,7 @@ export interface GameSettings {
 export function useGame() {
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [sessionScores, setSessionScores] = useState<SessionScore[]>([]);
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +78,9 @@ export function useGame() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
         () => { fetchPlayers(game.id); }
       )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_scores', filter: `game_id=eq.${game.id}` },
+        () => { fetchSessionScores(game.id); }
+      )
       .subscribe();
 
     return () => { supabase.removeChannel(gameChannel); };
@@ -80,6 +94,78 @@ export function useGame() {
       .order('turn_order', { ascending: true, nullsFirst: false });
     if (data) setPlayers(data as Player[]);
   };
+
+  const fetchSessionScores = async (gameId: string) => {
+    const { data } = await supabase
+      .from('session_scores')
+      .select('*')
+      .eq('game_id', gameId)
+      .order('score', { ascending: false });
+    if (data) setSessionScores(data as SessionScore[]);
+  };
+
+  const initializeScores = useCallback(async () => {
+    if (!game || !isHost) return;
+    
+    // Create score records for all players
+    for (const player of players) {
+      await supabase.from('session_scores').upsert({
+        game_id: game.id,
+        player_id: player.id,
+        score: 0,
+        rounds_won: 0,
+        correct_votes: 0,
+      }, {
+        onConflict: 'game_id,player_id'
+      });
+    }
+  }, [game, isHost, players]);
+
+  const updateScores = useCallback(async () => {
+    if (!game) return;
+
+    // Calculate round results
+    const imposters = players.filter(p => p.is_imposter);
+    const civilians = players.filter(p => !p.is_imposter);
+    
+    // Determine who won this round
+    const civiliansWon = civilians.every(c => c.vote_for && imposters.some(i => i.id === c.vote_for));
+    const impostersWon = !civiliansWon;
+
+    // Update scores for each player
+    for (const player of players) {
+      let pointsToAdd = 0;
+      let roundsWonIncrement = 0;
+      let correctVotesIncrement = 0;
+
+      // Check if player won the round
+      if ((civiliansWon && !player.is_imposter) || (impostersWon && player.is_imposter)) {
+        pointsToAdd += 2;
+        roundsWonIncrement = 1;
+      }
+
+      // Check if player voted correctly
+      if (player.vote_for) {
+        const votedPlayer = players.find(p => p.id === player.vote_for);
+        if (votedPlayer && votedPlayer.is_imposter !== player.is_imposter) {
+          pointsToAdd += 1;
+          correctVotesIncrement = 1;
+        }
+      }
+
+      // Update the player's score
+      if (pointsToAdd > 0) {
+        const currentScore = sessionScores.find(s => s.player_id === player.id);
+        if (currentScore) {
+          await supabase.from('session_scores').update({
+            score: currentScore.score + pointsToAdd,
+            rounds_won: currentScore.rounds_won + roundsWonIncrement,
+            correct_votes: currentScore.correct_votes + correctVotesIncrement,
+          }).eq('id', currentScore.id);
+        }
+      }
+    }
+  }, [game, players, sessionScores]);
 
   const createGame = useCallback(async (hostName: string) => {
     setLoading(true);
@@ -194,7 +280,10 @@ export function useGame() {
       imposter_clue: wordPair.imposterClue,
       current_turn_index: 0,
     }).eq('id', game.id);
-  }, [game, isHost, players]);
+
+    // Initialize scores for this game session
+    await initializeScores();
+  }, [game, isHost, players, initializeScores]);
 
   const proceedToClues = useCallback(async () => {
     if (!game || !isHost) return;
@@ -226,8 +315,10 @@ export function useGame() {
 
     if (allVoted) {
       await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
+      // Update scores after voting is complete
+      await updateScores();
     }
-  }, [game, currentPlayerId, players]);
+  }, [game, currentPlayerId, players, updateScores]);
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
@@ -248,8 +339,8 @@ export function useGame() {
   }, [game, isHost, players]);
 
   return {
-    game, players, currentPlayer, currentPlayerId, isHost, loading, error,
+    game, players, sessionScores, currentPlayer, currentPlayerId, isHost, loading, error,
     createGame, joinGame, startGame, proceedToClues, submitClue, submitVote, playAgain,
-    updateSettings, setError,
+    updateSettings, setError, initializeScores, updateScores,
   };
 }
