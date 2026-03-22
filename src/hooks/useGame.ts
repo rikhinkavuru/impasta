@@ -58,35 +58,60 @@ export function useGame() {
   useEffect(() => {
     if (!game?.id) return;
 
+    console.log('🔗 Setting up realtime subscription for game:', game.id);
+    
     const gameChannel = supabase
       .channel(`game-${game.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
         (payload) => {
+          console.log('📢 Game update received:', payload);
           if (payload.new) setGame(payload.new as Game);
         }
       )
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
-        () => { 
+        (payload) => {
+          console.log('👥 Players update received:', payload);
           fetchPlayers(game.id); 
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Realtime subscription active');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.log('❌ Realtime subscription error:', status);
+        }
+      });
 
-    return () => { supabase.removeChannel(gameChannel); };
+    return () => { 
+      console.log('🔌 Cleaning up realtime subscription');
+      supabase.removeChannel(gameChannel); 
+    };
   }, [game?.id]);
 
   const fetchPlayers = async (gameId: string) => {
-    const { data } = await supabase
-      .from('players')
-      .select('*')
-      .eq('game_id', gameId)
-      .order('turn_order', { ascending: true, nullsFirst: false });
-    if (data) {
-      const playersWithScores = data.map(p => ({ 
-        ...p, 
-        score: (p as { score?: number }).score || 0 
-      })) as Player[];
-      setPlayers(playersWithScores);
+    try {
+      console.log('📥 Fetching players for game:', gameId);
+      const { data, error } = await supabase
+        .from('players')
+        .select('*')
+        .eq('game_id', gameId)
+        .order('turn_order', { ascending: true, nullsFirst: false });
+      
+      if (error) {
+        console.error('❌ Fetch players error:', error);
+        return;
+      }
+      
+      if (data) {
+        const playersWithScores = data.map(p => ({ 
+          ...p, 
+          score: (p as { score?: number }).score || 0 
+        })) as Player[];
+        console.log('✅ Players fetched:', playersWithScores.map(p => ({ name: p.name, score: p.score })));
+        setPlayers(playersWithScores);
+      }
+    } catch (err) {
+      console.error('❌ Unexpected fetch error:', err);
     }
   };
 
@@ -94,6 +119,7 @@ export function useGame() {
     setLoading(true);
     setError(null);
     try {
+      console.log('🎮 Creating game with host:', hostName);
       const code = generateGameCode();
       const { data: gameData, error: gameError } = await supabase
         .from('games')
@@ -114,7 +140,9 @@ export function useGame() {
       setGame({ ...gameData, host_player_id: playerData.id } as Game);
       setCurrentPlayerId(playerData.id);
       setPlayers([{ ...playerData, score: 0 } as Player]);
+      console.log('✅ Game created successfully');
     } catch (e: unknown) {
+      console.error('❌ Create game error:', e);
       setError(getErrorMessage(e));
     } finally {
       setLoading(false);
