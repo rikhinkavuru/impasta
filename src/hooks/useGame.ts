@@ -251,18 +251,18 @@ export function useGame() {
     console.log('Score updates calculated:', scoreUpdates);
 
     // Update local state immediately for responsive UI
-    const updatedPlayers = players.map(p => ({
+    const playersWithNewScores = players.map(p => ({
       ...p,
       score: (p.score || 0) + (scoreUpdates[p.id] || 0)
     }));
     
-    console.log('📊 Final Scores:', updatedPlayers.map(p => ({ 
+    console.log('📊 Final Scores:', playersWithNewScores.map(p => ({ 
       name: p.name, 
       oldScore: players.find(pl => pl.id === p.id)?.score || 0, 
       newScore: p.score, 
       change: scoreUpdates[p.id] || 0 
     })));
-    setPlayers(updatedPlayers);
+    setPlayers(playersWithNewScores);
 
     // For Lovable Cloud, work with local state only
     console.log('✅ Leaderboard updated!');
