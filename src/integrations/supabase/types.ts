@@ -19,9 +19,11 @@ export type Database = {
           code: string
           created_at: string
           current_turn_index: number | null
+          difficulty: string
           host_player_id: string | null
           id: string
           imposter_clue: string | null
+          imposter_count: number
           phase: string
           word: string | null
         }
@@ -29,9 +31,11 @@ export type Database = {
           code: string
           created_at?: string
           current_turn_index?: number | null
+          difficulty?: string
           host_player_id?: string | null
           id?: string
           imposter_clue?: string | null
+          imposter_count?: number
           phase?: string
           word?: string | null
         }
@@ -39,9 +43,11 @@ export type Database = {
           code?: string
           created_at?: string
           current_turn_index?: number | null
+          difficulty?: string
           host_player_id?: string | null
           id?: string
           imposter_clue?: string | null
+          imposter_count?: number
           phase?: string
           word?: string | null
         }

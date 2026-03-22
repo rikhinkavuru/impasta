@@ -1,19 +1,37 @@
-import { useState } from 'react';
-import { Copy, Check, Settings, Users, Play } from 'lucide-react';
-import type { Game, Player } from '@/hooks/useGame';
+import { useState, useEffect } from 'react';
+import { Copy, Check, Settings, Users, Play, ChevronDown, ChevronUp, Shuffle } from 'lucide-react';
+import type { Game, Player, GameSettings } from '@/hooks/useGame';
+import type { Difficulty } from '@/lib/wordBank';
 
 interface LobbyScreenProps {
   game: Game;
   players: Player[];
   isHost: boolean;
   onStartGame: (customWord?: string, customClue?: string) => void;
+  onUpdateSettings: (settings: GameSettings) => void;
 }
 
-export default function LobbyScreen({ game, players, isHost, onStartGame }: LobbyScreenProps) {
+const difficultyDescriptions: Record<Difficulty, string> = {
+  easy: 'Clue is very close to the word',
+  medium: 'Clue is somewhat related',
+  hard: 'Clue is loosely connected',
+};
+
+export default function LobbyScreen({ game, players, isHost, onStartGame, onUpdateSettings }: LobbyScreenProps) {
   const [copied, setCopied] = useState(false);
-  const [showCustom, setShowCustom] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [customWord, setCustomWord] = useState('');
   const [customClue, setCustomClue] = useState('');
+  const [useCustomWord, setUseCustomWord] = useState(false);
+
+  const [difficulty, setDifficulty] = useState<Difficulty>((game.difficulty as Difficulty) || 'medium');
+  const [imposterCount, setImposterCount] = useState<number>(game.imposter_count ?? 1);
+
+  // Sync settings to DB when they change
+  useEffect(() => {
+    if (!isHost) return;
+    onUpdateSettings({ difficulty, imposterCount });
+  }, [difficulty, imposterCount]);
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(game.code);
@@ -22,12 +40,21 @@ export default function LobbyScreen({ game, players, isHost, onStartGame }: Lobb
   };
 
   const handleStart = () => {
-    if (showCustom && customWord.trim() && customClue.trim()) {
+    if (useCustomWord && customWord.trim() && customClue.trim()) {
       onStartGame(customWord.trim(), customClue.trim());
     } else {
       onStartGame();
     }
   };
+
+  const imposterOptions = [
+    { value: -1, label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
+    ...Array.from({ length: players.length }, (_, i) => ({
+      value: i,
+      label: `${i}`,
+      icon: null,
+    })),
+  ];
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -69,32 +96,97 @@ export default function LobbyScreen({ game, players, isHost, onStartGame }: Lobb
           </div>
         </div>
 
-        {/* Custom word (host only) */}
+        {/* Host Settings */}
         {isHost && (
           <div className="space-y-3">
             <button
-              onClick={() => setShowCustom(!showCustom)}
-              className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              onClick={() => setShowSettings(!showSettings)}
+              className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors w-full"
             >
               <Settings className="w-3.5 h-3.5" />
-              {showCustom ? 'Use random word' : 'Use custom word'}
+              Game Settings
+              {showSettings ? <ChevronUp className="w-3.5 h-3.5 ml-auto" /> : <ChevronDown className="w-3.5 h-3.5 ml-auto" />}
             </button>
-            {showCustom && (
-              <div className="space-y-2 animate-fade-in-up">
-                <input
-                  type="text"
-                  value={customWord}
-                  onChange={(e) => setCustomWord(e.target.value)}
-                  placeholder="Secret word"
-                  className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-                />
-                <input
-                  type="text"
-                  value={customClue}
-                  onChange={(e) => setCustomClue(e.target.value)}
-                  placeholder="Imposter's clue"
-                  className="w-full px-4 py-2.5 rounded-xl bg-secondary border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
-                />
+
+            {showSettings && (
+              <div className="space-y-4 animate-fade-in-up rounded-2xl bg-secondary/40 border border-border/50 p-4">
+                {/* Difficulty */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Difficulty</p>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
+                      <button
+                        key={d}
+                        onClick={() => setDifficulty(d)}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-semibold capitalize transition-all active:scale-[0.96] ${
+                          difficulty === d
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/60 border border-border/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {d}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{difficultyDescriptions[difficulty]}</p>
+                </div>
+
+                {/* Imposter Count */}
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Imposters</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {imposterOptions.map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setImposterCount(opt.value)}
+                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-[0.96] ${
+                          imposterCount === opt.value
+                            ? 'bg-primary text-primary-foreground shadow-md'
+                            : 'bg-secondary/60 border border-border/50 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {opt.icon}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    {imposterCount === -1
+                      ? `Randomly assigns 0–${players.length} imposters`
+                      : imposterCount === 0
+                      ? 'No imposters — pure chaos!'
+                      : `${imposterCount} imposter${imposterCount > 1 ? 's' : ''} per round`
+                    }
+                  </p>
+                </div>
+
+                {/* Custom Word */}
+                <div className="space-y-2">
+                  <button
+                    onClick={() => setUseCustomWord(!useCustomWord)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {useCustomWord ? '✕ Use random word instead' : '+ Use custom word'}
+                  </button>
+                  {useCustomWord && (
+                    <div className="space-y-2 animate-fade-in-up">
+                      <input
+                        type="text"
+                        value={customWord}
+                        onChange={(e) => setCustomWord(e.target.value)}
+                        placeholder="Secret word"
+                        className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={customClue}
+                        onChange={(e) => setCustomClue(e.target.value)}
+                        placeholder="Imposter's clue"
+                        className="w-full px-4 py-2.5 rounded-xl bg-background border border-border text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring text-sm"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

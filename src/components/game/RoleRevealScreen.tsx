@@ -29,7 +29,7 @@ export default function RoleRevealScreen({ game, currentPlayer, isHost, onProcee
             <p className={`text-xs font-semibold uppercase tracking-widest mb-2 ${
               isImposter ? 'text-game-danger' : 'text-game-success'
             }`}>
-              {isImposter ? 'You are the Imposter' : 'You are a Civilian'}
+              {isImposter ? 'You are an Imposter' : 'You are a Civilian'}
             </p>
           </div>
 

@@ -10,10 +10,9 @@ export default function Index() {
   const {
     game, players, currentPlayer, isHost, loading, error,
     createGame, joinGame, startGame, proceedToClues, submitClue, submitVote, playAgain,
-    setError,
+    updateSettings, setError,
   } = useGame();
 
-  // No game yet - show home screen
   if (!game || !currentPlayer) {
     return (
       <HomeScreen
@@ -28,7 +27,7 @@ export default function Index() {
 
   switch (game.phase) {
     case 'lobby':
-      return <LobbyScreen game={game} players={players} isHost={isHost} onStartGame={startGame} />;
+      return <LobbyScreen game={game} players={players} isHost={isHost} onStartGame={startGame} onUpdateSettings={updateSettings} />;
     case 'role_reveal':
       return <RoleRevealScreen game={game} currentPlayer={currentPlayer} isHost={isHost} onProceed={proceedToClues} />;
     case 'clue_giving':
