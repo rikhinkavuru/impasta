@@ -128,8 +128,20 @@ export function useGame() {
     const imposters = players.filter(p => p.is_imposter);
     const civilians = players.filter(p => !p.is_imposter);
     
+    // Count votes for each player
+    const voteCounts: Record<string, number> = {};
+    players.forEach(p => {
+      if (p.vote_for) {
+        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+      }
+    });
+
+    // Find the player with the most votes
+    const maxVotes = Math.max(...Object.values(voteCounts), 0);
+    const mostVotedPlayer = maxVotes > 0 ? players.find(p => p.id === Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0]) : null;
+    
     // Determine who won this round
-    const civiliansWon = civilians.every(c => c.vote_for && imposters.some(i => i.id === c.vote_for));
+    const civiliansWon = mostVotedPlayer && mostVotedPlayer.is_imposter;
     const impostersWon = !civiliansWon;
 
     // Update scores for each player
