@@ -154,7 +154,7 @@
 
 /* Luxury Input Style */
 .luxury-input {
-  @apply bg-transparent border-0 border-b border-border rounded-none px-0 py-4 
+  @apply bg-transparent border-0 border-b border-border rounded-none px-4 py-6 
          focus:ring-0 focus:border-primary transition-all duration-300
          text-2xl font-medium placeholder:text-muted-foreground/30;
 }

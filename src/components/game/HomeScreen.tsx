@@ -38,7 +38,7 @@ export default function HomeScreen({ onCreateGame, onJoinGame, loading, error, c
             Imposter
           </h1>
           <p className="text-sm font-medium tracking-[0.2em] uppercase text-muted-foreground/60">
-            Premium Party Experience
+            By Rikhin Kavuru
           </p>
         </div>
 
