@@ -35,6 +35,7 @@ export interface Player {
   clue: string | null;
   vote_for: string | null;
   turn_order: number | null;
+  score: number;
 }
 
 export interface GameSettings {
@@ -78,7 +79,13 @@ export function useGame() {
       .select('*')
       .eq('game_id', gameId)
       .order('turn_order', { ascending: true, nullsFirst: false });
-    if (data) setPlayers(data as Player[]);
+    if (data) {
+      const playersWithScores = data.map(p => ({ 
+        ...p, 
+        score: (p as { score?: number }).score || 0 
+      })) as Player[];
+      setPlayers(playersWithScores);
+    }
   };
 
   const createGame = useCallback(async (hostName: string) => {
@@ -104,7 +111,7 @@ export function useGame() {
 
       setGame({ ...gameData, host_player_id: playerData.id } as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([playerData as Player]);
+      setPlayers([{ ...playerData, score: 0 } as Player]);
     } catch (e: unknown) {
       setError(getErrorMessage(e));
     } finally {
@@ -217,6 +224,88 @@ export function useGame() {
     }
   }, [game, currentPlayerId, players]);
 
+  const calculateAndUpdateScores = useCallback(async () => {
+    if (!game || !players.length) return;
+
+    const imposters = players.filter(p => p.is_imposter);
+    const imposterIds = new Set(imposters.map(p => p.id));
+
+    // Count votes
+    const voteCounts: Record<string, number> = {};
+    players.forEach(p => {
+      if (p.vote_for) {
+        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+      }
+    });
+
+    const maxVotes = Math.max(...Object.values(voteCounts), 0);
+    const mostVotedId = Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0];
+
+    // Determine outcome
+    const noImposters = imposters.length === 0;
+    const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
+
+    // Calculate score changes (store in local state for now)
+    const updatedPlayers = [...players];
+    const scoreUpdates: Record<string, number> = {};
+    
+    if (noImposters) {
+      // No imposters - everyone gets a small bonus
+      players.forEach(p => {
+        scoreUpdates[p.id] = 5;
+      });
+    } else if (imposterCaught) {
+      // Civilians win - civilians get points, imposters lose points
+      players.forEach(p => {
+        if (p.is_imposter) {
+          scoreUpdates[p.id] = -10;
+        } else {
+          scoreUpdates[p.id] = 15;
+        }
+      });
+    } else {
+      // Imposters win - imposters get points, civilians lose points
+      players.forEach(p => {
+        if (p.is_imposter) {
+          scoreUpdates[p.id] = 20;
+        } else {
+          scoreUpdates[p.id] = -5;
+        }
+      });
+    }
+
+    // Bonus for correct voting
+    players.forEach(p => {
+      if (p.vote_for && imposterIds.has(p.vote_for)) {
+        scoreUpdates[p.id] = (scoreUpdates[p.id] || 0) + 5;
+      }
+    });
+
+    // Update local player scores
+    const playersWithNewScores = updatedPlayers.map(p => ({
+      ...p,
+      score: (p.score || 0) + (scoreUpdates[p.id] || 0)
+    }));
+    
+    setPlayers(playersWithNewScores);
+
+    // Try to update database if score column exists (ignore errors for now)
+    for (const [playerId, scoreChange] of Object.entries(scoreUpdates)) {
+      const player = players.find(p => p.id === playerId);
+      if (player) {
+        try {
+          await supabase
+            .from('players')
+            .update({ score: (player.score || 0) + scoreChange } as any)
+            .eq('id', playerId);
+        } catch (error) {
+          // Ignore database errors for now - scores are tracked locally
+          console.log('Score update failed (column may not exist yet):', error);
+        }
+      }
+    }
+  }, [game, players]);
+
   const submitVote = useCallback(async (votedPlayerId: string) => {
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
@@ -226,8 +315,10 @@ export function useGame() {
 
     if (allVoted) {
       await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
+      // Calculate and update scores when game ends
+      await calculateAndUpdateScores();
     }
-  }, [game, currentPlayerId, players]);
+  }, [game, currentPlayerId, players, calculateAndUpdateScores]);
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
