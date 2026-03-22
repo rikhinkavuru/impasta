@@ -14,7 +14,98 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      games: {
+        Row: {
+          code: string
+          created_at: string
+          current_turn_index: number | null
+          host_player_id: string | null
+          id: string
+          imposter_clue: string | null
+          phase: string
+          word: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          current_turn_index?: number | null
+          host_player_id?: string | null
+          id?: string
+          imposter_clue?: string | null
+          phase?: string
+          word?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          current_turn_index?: number | null
+          host_player_id?: string | null
+          id?: string
+          imposter_clue?: string | null
+          phase?: string
+          word?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_host"
+            columns: ["host_player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          clue: string | null
+          created_at: string
+          game_id: string
+          id: string
+          is_host: boolean
+          is_imposter: boolean
+          name: string
+          turn_order: number | null
+          vote_for: string | null
+        }
+        Insert: {
+          clue?: string | null
+          created_at?: string
+          game_id: string
+          id?: string
+          is_host?: boolean
+          is_imposter?: boolean
+          name: string
+          turn_order?: number | null
+          vote_for?: string | null
+        }
+        Update: {
+          clue?: string | null
+          created_at?: string
+          game_id?: string
+          id?: string
+          is_host?: boolean
+          is_imposter?: boolean
+          name?: string
+          turn_order?: number | null
+          vote_for?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "players_vote_for_fkey"
+            columns: ["vote_for"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
