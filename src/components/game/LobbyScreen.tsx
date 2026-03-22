@@ -161,9 +161,9 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                   </div>
                 </div>
 
-                {/* Imposters */}
+                {/* Imposters Selection Mode */}
                 <div className="space-y-4">
-                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Imposters</p>
+                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Imposter Selection</p>
                   <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -189,6 +189,66 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                     </button>
                   </div>
                 </div>
+
+                {/* Fixed Count or Random Range */}
+                {!imposterRandom ? (
+                  <div className="space-y-4">
+                    <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Count</p>
+                    <div className="flex flex-wrap gap-2">
+                      {Array.from({ length: Math.min(playerCount + 1, 6) }, (_, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => setFixedCount(i)}
+                          className={cn(
+                            'w-10 h-10 rounded-xl text-[10px] font-extrabold uppercase transition-all',
+                            fixedCount === i ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
+                          )}
+                        >
+                          {i}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Range</p>
+                      <span className="text-[10px] font-extrabold text-primary uppercase tracking-[0.1em]">{imposterMin} to {imposterMax}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Min</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={playerCount}
+                          value={imposterMin}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(Number(e.target.value), playerCount));
+                            setImposterMin(val);
+                            if (val > imposterMax) setImposterMax(val);
+                          }}
+                          className="w-full luxury-input text-base py-2"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Max</label>
+                        <input
+                          type="number"
+                          min={imposterMin}
+                          max={playerCount}
+                          value={imposterMax}
+                          onChange={(e) => {
+                            const val = Math.max(imposterMin, Math.min(Number(e.target.value), playerCount));
+                            setImposterMax(val);
+                          }}
+                          className="w-full luxury-input text-base py-2"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
