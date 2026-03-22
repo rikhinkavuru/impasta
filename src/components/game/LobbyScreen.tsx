@@ -25,13 +25,23 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
   const [useCustomWord, setUseCustomWord] = useState(false);
 
   const [difficulty, setDifficulty] = useState<Difficulty>((game.difficulty as Difficulty) || 'medium');
-  const [imposterCount, setImposterCount] = useState<number>(game.imposter_count ?? 1);
+  const [imposterMin, setImposterMin] = useState<number>(game.imposter_min ?? 1);
+  const [imposterMax, setImposterMax] = useState<number>(game.imposter_max ?? 1);
+
+  useEffect(() => {
+    setDifficulty((game.difficulty as Difficulty) || 'medium');
+    setImposterMin(game.imposter_min ?? 1);
+    setImposterMax(game.imposter_max ?? 1);
+  }, [game.difficulty, game.imposter_min, game.imposter_max]);
 
   // Sync settings to DB when they change
   useEffect(() => {
     if (!isHost) return;
-    onUpdateSettings({ difficulty, imposterCount });
-  }, [difficulty, imposterCount]);
+    const n = players.length;
+    const min = Math.max(0, Math.min(imposterMin, n));
+    const max = Math.max(min, Math.min(imposterMax, n));
+    onUpdateSettings({ difficulty, imposterMin: min, imposterMax: max });
+  }, [difficulty, imposterMin, imposterMax, isHost, onUpdateSettings, players.length]);
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(game.code);
@@ -47,14 +57,11 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     }
   };
 
-  const imposterOptions = [
-    { value: -1, label: 'Random', icon: <Shuffle className="w-3.5 h-3.5" /> },
-    ...Array.from({ length: players.length }, (_, i) => ({
-      value: i,
-      label: `${i}`,
-      icon: null,
-    })),
-  ];
+  const playerCount = players.length;
+  const minSel = Math.min(imposterMin, playerCount);
+  const displayMax = Math.max(minSel, Math.min(imposterMax, playerCount));
+  const minOptions = Array.from({ length: playerCount + 1 }, (_, i) => i);
+  const maxOptions = Array.from({ length: playerCount - minSel + 1 }, (_, i) => minSel + i);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6">
@@ -131,32 +138,58 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                   <p className="text-[11px] text-muted-foreground">{difficultyDescriptions[difficulty]}</p>
                 </div>
 
-                {/* Imposter Count */}
+                {/* Imposter count range (random each round) */}
                 <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Imposters</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {imposterOptions.map((opt) => (
-                      <button
-                        key={opt.value}
-                        onClick={() => setImposterCount(opt.value)}
-                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold transition-all active:scale-[0.96] ${
-                          imposterCount === opt.value
-                            ? 'bg-primary text-primary-foreground shadow-md'
-                            : 'bg-secondary/60 border border-border/50 text-muted-foreground hover:text-foreground'
-                        }`}
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                    <Shuffle className="w-3.5 h-3.5" />
+                    Imposters (random per round)
+                  </p>
+                  <div className="flex flex-wrap items-end gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase text-muted-foreground">Min</label>
+                      <select
+                        value={minSel}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setImposterMin(v);
+                          setImposterMax((m) => Math.max(v, m));
+                        }}
+                        className="px-3 py-2 rounded-xl text-sm font-semibold bg-secondary/60 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
                       >
-                        {opt.icon}
-                        {opt.label}
-                      </button>
-                    ))}
+                        {minOptions.map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="text-muted-foreground pb-2 text-sm">–</span>
+                    <div className="space-y-1">
+                      <label className="text-[10px] uppercase text-muted-foreground">Max</label>
+                      <select
+                        value={displayMax}
+                        onChange={(e) => setImposterMax(Number(e.target.value))}
+                        className="px-3 py-2 rounded-xl text-sm font-semibold bg-secondary/60 border border-border/50 text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+                      >
+                        {maxOptions.map((v) => (
+                          <option key={v} value={v}>
+                            {v}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    {imposterCount === -1
-                      ? `Randomly assigns 0–${players.length} imposters`
-                      : imposterCount === 0
-                      ? 'No imposters — pure chaos!'
-                      : `${imposterCount} imposter${imposterCount > 1 ? 's' : ''} per round`
-                    }
+                    {(() => {
+                      const lo = minSel;
+                      const hi = displayMax;
+                      if (lo === hi) {
+                        return lo === 0
+                          ? 'Exactly 0 imposters each round'
+                          : `Exactly ${lo} imposter${lo > 1 ? 's' : ''} each round`;
+                      }
+                      return `Each round the game picks ${lo}–${hi} imposters at random (based on ${playerCount} players)`;
+                    })()}
                   </p>
                 </div>
 

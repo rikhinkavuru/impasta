@@ -18,4 +18,8 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    // Single-route app ships one main chunk; default 500 kB warning is noisy here
+    chunkSizeWarningLimit: 600,
+  },
 }));

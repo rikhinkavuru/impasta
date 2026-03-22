@@ -1,7 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
-import { getRandomWordPair, type Difficulty } from '@/lib/wordBank';
+import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
+
+function getErrorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  return String(e);
+}
 
 export type GamePhase = 'lobby' | 'role_reveal' | 'clue_giving' | 'voting' | 'results';
 
@@ -15,6 +20,9 @@ export interface Game {
   current_turn_index: number;
   difficulty: Difficulty;
   imposter_count: number;
+  /** Inclusive range; actual count is chosen at random when the round starts (clamped to player count). */
+  imposter_min: number;
+  imposter_max: number;
 }
 
 export interface Player {
@@ -30,7 +38,8 @@ export interface Player {
 
 export interface GameSettings {
   difficulty: Difficulty;
-  imposterCount: number; // -1 means random
+  imposterMin: number;
+  imposterMax: number;
 }
 
 export function useGame() {
@@ -94,8 +103,8 @@ export function useGame() {
       setGame({ ...gameData, host_player_id: playerData.id } as Game);
       setCurrentPlayerId(playerData.id);
       setPlayers([playerData as Player]);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -123,8 +132,8 @@ export function useGame() {
       setGame(gameData as Game);
       setCurrentPlayerId(playerData.id);
       await fetchPlayers(gameData.id);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (e: unknown) {
+      setError(getErrorMessage(e));
     } finally {
       setLoading(false);
     }
@@ -134,7 +143,9 @@ export function useGame() {
     if (!game || !isHost) return;
     await supabase.from('games').update({
       difficulty: settings.difficulty,
-      imposter_count: settings.imposterCount,
+      imposter_count: settings.imposterMax,
+      imposter_min: settings.imposterMin,
+      imposter_max: settings.imposterMax,
     }).eq('id', game.id);
   }, [game, isHost]);
 
@@ -143,28 +154,33 @@ export function useGame() {
 
     const difficulty = (game.difficulty || 'medium') as Difficulty;
     const wordPair = customWord && customClue
-      ? { word: customWord, imposterClue: customClue }
-      : getRandomWordPair(difficulty);
+      ? { word: customWord, imposterClue: normalizeImposterClueToOneWord(customClue) }
+      : await getRandomWordPair(difficulty);
 
-    const shuffledIds = shuffleArray(players.map(p => p.id));
+    const playerIds = players.map(p => p.id);
+    // Imposter selection and clue order must be independent shuffles, or imposters
+    // would always get the first turn_order slots (0..numImposters-1).
+    const imposterPickOrder = shuffleArray(playerIds);
+    const clueOrder = shuffleArray(playerIds);
 
-    // Determine number of imposters
-    let numImposters = game.imposter_count ?? 1;
-    if (numImposters === -1) {
-      // Random: 0 to players.length
-      numImposters = Math.floor(Math.random() * (players.length + 1));
-    }
-    numImposters = Math.min(numImposters, players.length);
+    // Random count within host range [min, max], clamped to player count
+    const n = players.length;
+    const rawMin = game.imposter_min ?? (game.imposter_count < 0 ? 0 : game.imposter_count);
+    const rawMax = game.imposter_max ?? (game.imposter_count < 0 ? n : game.imposter_count);
+    const minImposters = Math.max(0, Math.min(rawMin, n));
+    const maxImposters = Math.max(minImposters, Math.min(rawMax, n));
+    const numImposters =
+      minImposters + Math.floor(Math.random() * (maxImposters - minImposters + 1));
 
-    const imposterIds = new Set(shuffledIds.slice(0, numImposters));
+    const imposterIds = new Set(imposterPickOrder.slice(0, numImposters));
 
-    for (let i = 0; i < shuffledIds.length; i++) {
+    for (let i = 0; i < clueOrder.length; i++) {
       await supabase.from('players').update({
         turn_order: i,
-        is_imposter: imposterIds.has(shuffledIds[i]),
+        is_imposter: imposterIds.has(clueOrder[i]),
         clue: null,
         vote_for: null,
-      }).eq('id', shuffledIds[i]);
+      }).eq('id', clueOrder[i]);
     }
 
     await supabase.from('games').update({

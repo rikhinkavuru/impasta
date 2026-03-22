@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Eye, EyeOff, Users, Zap } from 'lucide-react';
+import { preloadWordBank } from '@/lib/wordBank';
 
 interface HomeScreenProps {
   onCreateGame: (name: string) => void;
@@ -10,6 +11,10 @@ interface HomeScreenProps {
 }
 
 export default function HomeScreen({ onCreateGame, onJoinGame, loading, error, clearError }: HomeScreenProps) {
+  useEffect(() => {
+    preloadWordBank();
+  }, []);
+
   const [mode, setMode] = useState<'menu' | 'create' | 'join'>('menu');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');

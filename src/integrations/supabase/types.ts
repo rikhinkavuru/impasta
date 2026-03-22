@@ -24,6 +24,8 @@ export type Database = {
           id: string
           imposter_clue: string | null
           imposter_count: number
+          imposter_min: number
+          imposter_max: number
           phase: string
           word: string | null
         }
@@ -36,6 +38,8 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
+          imposter_min?: number
+          imposter_max?: number
           phase?: string
           word?: string | null
         }
@@ -48,6 +52,8 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
+          imposter_min?: number
+          imposter_max?: number
           phase?: string
           word?: string | null
         }
