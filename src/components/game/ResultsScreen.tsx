@@ -77,7 +77,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
           <div className="w-full h-px bg-border/50" />
           <div className="space-y-2">
             <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Imposter Clue</p>
-            <p className="text-lg font-extrabold tracking-tight text-muted-foreground uppercase italic">"{game.imposter_clue}"</p>
+            <p className="text-lg font-extrabold tracking-tight text-muted-foreground uppercase italic">{game.imposter_clue}</p>
           </div>
         </div>
 
