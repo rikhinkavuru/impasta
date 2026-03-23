@@ -73,6 +73,7 @@ export type Database = {
           clue: string | null
           created_at: string
           game_id: string
+          has_voted: boolean
           id: string
           is_host: boolean
           is_imposter: boolean
@@ -84,6 +85,7 @@ export type Database = {
           clue?: string | null
           created_at?: string
           game_id: string
+          has_voted?: boolean
           id?: string
           is_host?: boolean
           is_imposter?: boolean
@@ -95,6 +97,7 @@ export type Database = {
           clue?: string | null
           created_at?: string
           game_id?: string
+          has_voted?: boolean
           id?: string
           is_host?: boolean
           is_imposter?: boolean
@@ -179,8 +182,6 @@ export type Database = {
     }
   }
 }
-
-type DatabaseWithoutInternals = Omit<Database, "public"> // Simplified for this use case
 
 export type Tables<
   T extends keyof Database["public"]["Tables"]

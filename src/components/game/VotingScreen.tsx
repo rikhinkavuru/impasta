@@ -1,15 +1,14 @@
 import { useState } from 'react';
 import { Vote, Check, ShieldCheck, X } from 'lucide-react';
-import type { Game, Player } from '@/hooks/useGame';
+import type { Player } from '@/hooks/useGame';
 
 interface VotingScreenProps {
-  game: Game;
   players: Player[];
   currentPlayer: Player;
   onVote: (playerId: string | null) => void;
 }
 
-export default function VotingScreen({ game, players, currentPlayer, onVote }: VotingScreenProps) {
+export default function VotingScreen({ players, currentPlayer, onVote }: VotingScreenProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [skipVote, setSkipVote] = useState(false);
   const hasVoted = !!currentPlayer.has_voted;
@@ -27,7 +26,7 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
       <div className="w-full max-w-md space-y-12 animate-fade-in-up">
-        
+
         <div className="text-center space-y-4">
           <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Voting Phase</p>
           <h2 className="text-2xl font-extrabold tracking-tight text-foreground uppercase">
@@ -42,7 +41,7 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
             const isSelf = player.id === currentPlayer.id;
             const isSelected = selectedId === player.id && !skipVote;
             const isVotedFor = hasVoted && currentPlayer.vote_for === player.id;
-            
+
             return (
               <button
                 key={player.id}
@@ -52,9 +51,7 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
                   setSkipVote(false);
                 }}
                 className={`group relative flex flex-col items-start gap-4 p-6 rounded-[2.5rem] border-2 transition-all duration-300 text-left ${
-                  isVotedFor
-                    ? 'bg-primary border-primary accent-glow'
-                    : isSelected
+                  isVotedFor || isSelected
                     ? 'bg-primary border-primary accent-glow'
                     : isSelf
                     ? 'bg-white/40 border-border/20 opacity-50 cursor-not-allowed'
@@ -62,9 +59,11 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
                 }`}
               >
                 <div className="w-full flex items-center justify-between">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
-                    isSelected || isVotedFor ? 'bg-white text-primary' : 'bg-primary/10 text-primary'
-                  }`}>
+                  <div
+                    className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                      isSelected || isVotedFor ? 'bg-white text-primary' : 'bg-primary/10 text-primary'
+                    }`}
+                  >
                     {player.name[0].toUpperCase()}
                   </div>
                   {(isSelected || isVotedFor) && (
@@ -80,17 +79,21 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
                 </div>
 
                 <div className="space-y-1">
-                  <p className={`text-lg font-extrabold tracking-tight uppercase ${
-                    isSelected || isVotedFor ? 'text-primary-foreground' : 'text-foreground'
-                  }`}>
+                  <p
+                    className={`text-lg font-extrabold tracking-tight uppercase ${
+                      isSelected || isVotedFor ? 'text-primary-foreground' : 'text-foreground'
+                    }`}
+                  >
                     {player.name}
                     {isSelf && <span className="ml-2 text-[10px] opacity-60">YOU</span>}
                   </p>
                   {player.clue && (
-                    <p className={`text-sm font-extrabold tracking-tight uppercase italic ${
-                      isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                    }`}>
-                      "{player.clue}"
+                    <p
+                      className={`text-sm font-extrabold tracking-tight uppercase italic ${
+                        isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                      }`}
+                    >
+                      &ldquo;{player.clue}&rdquo;
                     </p>
                   )}
                 </div>
@@ -103,7 +106,7 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
         {!hasVoted && (
           <button
             onClick={() => {
-              setSkipVote(!skipVote);
+              setSkipVote(prev => !prev);
               setSelectedId(null);
             }}
             className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-[2rem] border-2 transition-all ${

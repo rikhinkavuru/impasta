@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash, MessageSquare } from 'lucide-react';
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
@@ -35,17 +35,20 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
   const [imposterMax, setImposterMax] = useState<number>(game.imposter_max ?? 1);
   const [clueRounds, setClueRounds] = useState<number>(game.clue_rounds ?? 1);
 
-  // Synchronize local state with remote game data, but only if not host to avoid feedback loops
-  // or if it's the first load.
+  // Track whether the host is actively editing settings to avoid overwriting their changes
+  const isEditingRef = useRef(false);
+
+  // Synchronize local state from remote game data (for non-host players, or initial load)
   useEffect(() => {
-    if (isHost && showSettings) return; // Don't overwrite host's active editing
+    // Don't overwrite the host's in-progress edits
+    if (isHost && isEditingRef.current) return;
 
     setDifficulty((game.difficulty as Difficulty) || 'medium');
     const random =
       typeof game.imposter_random === 'boolean'
         ? game.imposter_random
         : game.imposter_min !== game.imposter_max;
-    
+
     setImposterRandom(random);
     setImposterMin(game.imposter_min ?? 1);
     setImposterMax(game.imposter_max ?? 1);
@@ -53,28 +56,45 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     setClueRounds(game.clue_rounds ?? 1);
   }, [game.difficulty, game.imposter_min, game.imposter_max, game.imposter_random, game.clue_rounds, isHost]);
 
+  // Push host's settings changes to the DB
+  // Use a ref to debounce and avoid firing on the initial sync from the effect above
+  const settingsPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevSettingsRef = useRef({ difficulty, imposterRandom, imposterMin, imposterMax, fixedCount, clueRounds });
+
   useEffect(() => {
     if (!isHost) return;
-    const n = players.length;
-    if (imposterRandom) {
-      const min = Math.max(0, Math.min(imposterMin, n));
-      const max = Math.max(min, Math.min(imposterMax, n));
-      onUpdateSettings({ difficulty, imposterRandom: true, imposterMin: min, imposterMax: max, clueRounds });
-    } else {
-      const c = Math.min(Math.max(0, fixedCount), n);
-      onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c, clueRounds });
-    }
-  }, [
-    difficulty,
-    imposterRandom,
-    imposterMin,
-    imposterMax,
-    fixedCount,
-    clueRounds,
-    isHost,
-    onUpdateSettings,
-    players.length,
-  ]);
+
+    const prev = prevSettingsRef.current;
+    const changed =
+      prev.difficulty !== difficulty ||
+      prev.imposterRandom !== imposterRandom ||
+      prev.imposterMin !== imposterMin ||
+      prev.imposterMax !== imposterMax ||
+      prev.fixedCount !== fixedCount ||
+      prev.clueRounds !== clueRounds;
+
+    if (!changed) return;
+
+    prevSettingsRef.current = { difficulty, imposterRandom, imposterMin, imposterMax, fixedCount, clueRounds };
+
+    // Debounce rapid number-input changes
+    if (settingsPushTimerRef.current) clearTimeout(settingsPushTimerRef.current);
+    settingsPushTimerRef.current = setTimeout(() => {
+      const n = players.length;
+      if (imposterRandom) {
+        const min = Math.max(0, Math.min(imposterMin, n));
+        const max = Math.max(min, Math.min(imposterMax, n));
+        onUpdateSettings({ difficulty, imposterRandom: true, imposterMin: min, imposterMax: max, clueRounds });
+      } else {
+        const c = Math.min(Math.max(0, fixedCount), n);
+        onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c, clueRounds });
+      }
+    }, 300);
+
+    return () => {
+      if (settingsPushTimerRef.current) clearTimeout(settingsPushTimerRef.current);
+    };
+  }, [difficulty, imposterRandom, imposterMin, imposterMax, fixedCount, clueRounds, isHost, onUpdateSettings, players.length]);
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(game.code);
@@ -86,7 +106,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-background overflow-hidden">
-      
+
       {/* Top Section: Game Code */}
       <div className="w-full max-w-md pt-12 space-y-6 animate-fade-in-up">
         <div className="text-center space-y-4">
@@ -109,9 +129,9 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
           <div
             key={player.id}
             className="animate-fade-in-up flex items-center gap-3 px-6 py-3 rounded-full bg-white premium-shadow border border-border/50 animate-float"
-            style={{ 
+            style={{
               animationDelay: `${i * 150}ms`,
-              animationDuration: `${3 + (i % 2)}s`
+              animationDuration: `${3 + (i % 2)}s`,
             }}
           >
             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-extrabold text-primary">
@@ -132,11 +152,14 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
 
       {/* Bottom Section: Controls */}
       <div className="w-full max-w-md pb-12 space-y-6 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
-        
+
         {isHost && (
           <div className="space-y-4">
             <button
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => {
+                isEditingRef.current = !showSettings;
+                setShowSettings(s => !s);
+              }}
               className="flex items-center justify-center gap-2 text-[10px] font-extrabold text-muted-foreground/60 hover:text-foreground transition-colors w-full uppercase tracking-[0.2em]"
             >
               <Settings className="w-3.5 h-3.5" />
@@ -154,6 +177,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                       <button
                         key={d}
                         onClick={() => setDifficulty(d)}
+                        title={difficultyDescriptions[d]}
                         className={`px-4 py-3 rounded-2xl text-[10px] font-extrabold uppercase tracking-widest transition-all ${
                           difficulty === d
                             ? 'bg-primary text-primary-foreground accent-glow'

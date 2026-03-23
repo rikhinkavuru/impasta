@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { MessageCircle, Check, ArrowRight } from 'lucide-react';
+import { Check, ArrowRight } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 
 interface CluePhaseScreenProps {
@@ -11,18 +11,20 @@ interface CluePhaseScreenProps {
 
 export default function CluePhaseScreen({ game, players, currentPlayer, onSubmitClue }: CluePhaseScreenProps) {
   const [clue, setClue] = useState('');
+
   const sortedPlayers = [...players].sort((a, b) => (a.turn_order ?? 0) - (b.turn_order ?? 0));
-  
+
   const totalTurns = (game.clue_rounds || 1) * players.length;
-  const currentTurn = game.current_turn_index || 0;
+  const currentTurn = game.current_turn_index ?? 0;
   const currentRound = Math.floor(currentTurn / players.length) + 1;
   const turnInRound = currentTurn % players.length;
-  
+
   const activePlayer = sortedPlayers[turnInRound];
   const isMyTurn = activePlayer?.id === currentPlayer.id;
-  const hasSubmittedThisTurn = !!currentPlayer.clue;
+  // A player has submitted their clue for this turn if their clue field is populated
+  const hasSubmitted = !!currentPlayer.clue;
 
-  // Clear local input when turn changes
+  // Clear local input whenever the active turn slot changes
   useEffect(() => {
     setClue('');
   }, [currentTurn]);
@@ -32,16 +34,24 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
     onSubmitClue(clue.trim());
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSubmit();
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
       <div className="w-full max-w-md space-y-12 animate-fade-in-up">
-        
+
         <div className="text-center space-y-4">
           <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
             Clue Round {currentRound} / {game.clue_rounds || 1}
           </p>
           <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
-            {isMyTurn ? 'IT\'S YOUR TURN' : `WAITING FOR ${activePlayer?.name.toUpperCase()}`}
+            {isMyTurn && !hasSubmitted
+              ? "IT'S YOUR TURN"
+              : activePlayer
+              ? `WAITING FOR ${activePlayer.name.toUpperCase()}`
+              : 'WAITING...'}
           </h2>
           <p className="text-xs font-medium text-muted-foreground/60">One word only. Be subtle.</p>
         </div>
@@ -50,8 +60,8 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
         <div className="space-y-3">
           {sortedPlayers.map((player, i) => {
             const isActive = i === turnInRound;
-            const isDone = i < turnInRound || (i === turnInRound && !!player.clue);
-            
+            const isDone = i < turnInRound || (isActive && !!player.clue);
+
             return (
               <div
                 key={player.id}
@@ -64,22 +74,34 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
                 }`}
                 style={{ animationDelay: `${i * 100}ms` }}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
-                  isActive ? 'bg-white text-primary' : isDone ? 'bg-primary/10 text-primary' : 'bg-secondary text-muted-foreground'
-                }`}>
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
+                    isActive
+                      ? 'bg-white text-primary'
+                      : isDone
+                      ? 'bg-primary/10 text-primary'
+                      : 'bg-secondary text-muted-foreground'
+                  }`}
+                >
                   {isDone ? <Check className="w-4 h-4" /> : i + 1}
                 </div>
-                
+
                 <div className="flex-1">
-                  <span className={`text-sm font-bold tracking-tight ${isActive ? 'text-primary-foreground' : 'text-foreground'}`}>
+                  <span
+                    className={`text-sm font-bold tracking-tight ${
+                      isActive ? 'text-primary-foreground' : 'text-foreground'
+                    }`}
+                  >
                     {player.name}
-                    {player.id === currentPlayer.id && <span className="ml-2 text-[10px] opacity-60 uppercase">you</span>}
+                    {player.id === currentPlayer.id && (
+                      <span className="ml-2 text-[10px] opacity-60 uppercase">you</span>
+                    )}
                   </span>
                 </div>
 
                 {player.clue && (
                   <span className="text-sm font-extrabold tracking-tight text-foreground uppercase">
-                    "{player.clue}"
+                    &ldquo;{player.clue}&rdquo;
                   </span>
                 )}
               </div>
@@ -87,15 +109,18 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
           })}
         </div>
 
-        {/* Input for current turn */}
-        {isMyTurn && !hasSubmittedThisTurn && (
+        {/* Input — only shown when it is this player's turn and they haven't submitted yet */}
+        {isMyTurn && !hasSubmitted && (
           <div className="space-y-6 animate-scale-in p-8 rounded-[3rem] bg-white premium-shadow border border-border/50">
             <div className="space-y-4">
-              <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Your Clue</label>
+              <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
+                Your Clue
+              </label>
               <input
                 type="text"
                 value={clue}
                 onChange={(e) => setClue(e.target.value.replace(/\s/g, ''))}
+                onKeyDown={handleKeyDown}
                 placeholder="TYPE WORD..."
                 maxLength={30}
                 autoFocus
@@ -105,7 +130,7 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
             <button
               onClick={handleSubmit}
               disabled={!clue.trim()}
-              className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2"
+              className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               SEND CLUE
               <ArrowRight className="w-5 h-5" />
@@ -113,7 +138,8 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
           </div>
         )}
 
-        {hasSubmittedThisTurn && !isMyTurn && (
+        {/* Waiting indicator — shown when it's not your turn OR you've already submitted */}
+        {(!isMyTurn || hasSubmitted) && (
           <div className="text-center py-6 space-y-4">
             <div className="inline-flex gap-1">
               <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />

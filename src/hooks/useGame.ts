@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
@@ -34,7 +34,7 @@ export interface Player {
   is_host: boolean;
   is_imposter: boolean;
   clue: string | null;
-  vote_for: string | null; // null means skip vote, string means voted for that player
+  vote_for: string | null;
   turn_order: number | null;
   has_voted: boolean;
 }
@@ -62,36 +62,115 @@ export function useGame() {
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Track words used in this session (reset only when a brand-new game is created)
   const [usedWords, setUsedWords] = useState<Set<string>>(new Set());
 
   const currentPlayer = players.find(p => p.id === currentPlayerId) || null;
   const isHost = currentPlayer?.is_host ?? false;
 
-  // Track used words when game word changes
+  // Keep a ref to the latest players so callbacks always see fresh data
+  const playersRef = useRef<Player[]>(players);
+  useEffect(() => { playersRef.current = players; }, [players]);
+
+  // Track used words whenever the game word changes
   useEffect(() => {
     if (game?.word) {
       setUsedWords(prev => new Set([...prev, game.word!.toLowerCase()]));
     }
   }, [game?.word]);
 
-  // Reset used words when returning to lobby
+  // Initialize scores when the game moves into role_reveal (i.e. a new round starts)
   useEffect(() => {
-    if (game?.phase === 'lobby') {
-      setUsedWords(new Set());
+    if (game?.phase === 'role_reveal') {
+      setSessionScores(prev => {
+        const existingIds = new Set(prev.map(s => s.player_id));
+        const newEntries: SessionScore[] = playersRef.current
+          .filter(p => !existingIds.has(p.id))
+          .map(p => ({ id: p.id, player_id: p.id, score: 0, rounds_won: 0, correct_votes: 0 }));
+        return newEntries.length > 0 ? [...prev, ...newEntries] : prev;
+      });
     }
-  }, [game?.id, game?.phase]);
+  }, [game?.phase]);
+
+  // Compute and persist scores when the game reaches the results phase
+  useEffect(() => {
+    if (game?.phase !== 'results') return;
+    const latestPlayers = playersRef.current;
+
+    const voteCounts: Record<string, number> = {};
+    latestPlayers.forEach(p => {
+      if (p.vote_for) {
+        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+      }
+    });
+
+    const maxVotes = Math.max(...Object.values(voteCounts), 0);
+    const mostVotedIds = Object.entries(voteCounts)
+      .filter(([, v]) => v === maxVotes && v > 0)
+      .map(([id]) => id);
+
+    const imposterCaught =
+      mostVotedIds.length === 1 &&
+      latestPlayers.find(p => p.id === mostVotedIds[0])?.is_imposter === true;
+    const civiliansWon = imposterCaught;
+    const impostersWon = !imposterCaught;
+
+    setSessionScores(prev =>
+      prev.map(score => {
+        const player = latestPlayers.find(p => p.id === score.player_id);
+        if (!player) return score;
+
+        let pointsToAdd = 0;
+        let roundsWonIncrement = 0;
+        let correctVotesIncrement = 0;
+
+        if (player.is_imposter) {
+          if (impostersWon) {
+            pointsToAdd += 10;
+            roundsWonIncrement = 1;
+          }
+        } else {
+          if (civiliansWon) {
+            pointsToAdd += 5;
+            roundsWonIncrement = 1;
+          }
+        }
+
+        if (!player.is_imposter && player.vote_for) {
+          const votedPlayer = latestPlayers.find(p => p.id === player.vote_for);
+          if (votedPlayer?.is_imposter) {
+            pointsToAdd += 3;
+            correctVotesIncrement = 1;
+          }
+        }
+
+        if (pointsToAdd === 0) return score;
+
+        return {
+          ...score,
+          score: score.score + pointsToAdd,
+          rounds_won: score.rounds_won + roundsWonIncrement,
+          correct_votes: score.correct_votes + correctVotesIncrement,
+        };
+      })
+    );
+  }, [game?.phase]);
 
   useEffect(() => {
     if (!game?.id) return;
 
     const gameChannel = supabase
       .channel(`game-${game.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'games', filter: `id=eq.${game.id}` },
         (payload) => {
           if (payload.new) setGame(payload.new as Game);
         }
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
         () => { fetchPlayers(game.id); }
       )
       .subscribe();
@@ -108,100 +187,11 @@ export function useGame() {
     if (data) setPlayers(data as Player[]);
   };
 
-  const initializeScores = useCallback(() => {
-    if (!game) return;
-    // Only initialize if we don't already have scores for these players
-    const existingIds = new Set(sessionScores.map(s => s.player_id));
-    const newScores: SessionScore[] = [];
-    for (const player of players) {
-      if (!existingIds.has(player.id)) {
-        newScores.push({
-          id: player.id,
-          player_id: player.id,
-          score: 0,
-          rounds_won: 0,
-          correct_votes: 0,
-        });
-      }
-    }
-    if (newScores.length > 0) {
-      setSessionScores(prev => [...prev, ...newScores]);
-    }
-  }, [game, players, sessionScores]);
-
-  const updateScores = useCallback(() => {
-    if (!game) return;
-
-    const imposters = players.filter(p => p.is_imposter);
-    const voteCounts: Record<string, number> = {};
-    players.forEach(p => {
-      if (p.vote_for) {
-        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
-      }
-    });
-
-    const maxVotes = Math.max(...Object.values(voteCounts), 0);
-    // Find ALL players who received the maximum number of votes
-    const mostVotedIds = Object.entries(voteCounts)
-      .filter(([_, v]) => v === maxVotes && v > 0)
-      .map(([id, _]) => id);
-
-    // Outcome logic:
-    // 1. If multiple people are tied for most votes, nobody is eliminated (Imposters win/get away)
-    // 2. If exactly one person is most voted, and they are an imposter, Civilians win
-    // 3. If exactly one person is most voted, and they are NOT an imposter, Imposters win
-    // 4. If nobody received any votes, Imposters win
-    
-    const imposterCaught = mostVotedIds.length === 1 && players.find(p => p.id === mostVotedIds[0])?.is_imposter;
-    const civiliansWon = imposterCaught;
-    const impostersWon = !imposterCaught;
-
-    setSessionScores(prev => {
-      return prev.map(score => {
-        const player = players.find(p => p.id === score.player_id);
-        if (!player) return score;
-
-        let pointsToAdd = 0;
-        let roundsWonIncrement = 0;
-        let correctVotesIncrement = 0;
-
-        // Points for winning the round
-        if (player.is_imposter) {
-          if (impostersWon) {
-            pointsToAdd += 10; // Imposters get big points for winning
-            roundsWonIncrement = 1;
-          }
-        } else {
-          if (civiliansWon) {
-            pointsToAdd += 5; // Civilians get points for catching imposter
-            roundsWonIncrement = 1;
-          }
-        }
-
-        // Points for correct individual vote (only for civilians)
-        if (!player.is_imposter && player.vote_for) {
-          const votedPlayer = players.find(p => p.id === player.vote_for);
-          if (votedPlayer && votedPlayer.is_imposter) {
-            pointsToAdd += 3; // Bonus for voting correctly
-            correctVotesIncrement = 1;
-          }
-        }
-
-        if (pointsToAdd === 0) return score;
-
-        return {
-          ...score,
-          score: score.score + pointsToAdd,
-          rounds_won: score.rounds_won + roundsWonIncrement,
-          correct_votes: score.correct_votes + correctVotesIncrement,
-        };
-      });
-    });
-  }, [game, players]);
-
   const createGame = useCallback(async (hostName: string) => {
     setLoading(true);
     setError(null);
+    // Reset used words for a brand-new game session
+    setUsedWords(new Set());
     try {
       const code = generateGameCode();
       const { data: gameData, error: gameError } = await supabase
@@ -279,12 +269,9 @@ export function useGame() {
     if (customWord && customClue) {
       wordPair = { word: customWord, imposterClue: normalizeImposterClueToOneWord(customClue) };
     } else {
-      // Get word from database first
       wordPair = await getRandomWordPair(difficulty);
-      
-      // Check if word has been used in this session
+
       if (usedWords.has(wordPair.word.toLowerCase())) {
-        // Fallback to AI-generated word
         console.log(`Word "${wordPair.word}" already used, generating new word with AI...`);
         const aiWordPair = await generateWordPairWithAI(difficulty, usedWords);
         if (aiWordPair) {
@@ -296,11 +283,12 @@ export function useGame() {
       }
     }
 
-    const playerIds = players.map(p => p.id);
+    const currentPlayers = playersRef.current;
+    const playerIds = currentPlayers.map(p => p.id);
     const imposterPickOrder = shuffleArray(playerIds);
     const clueOrder = shuffleArray(playerIds);
 
-    const n = players.length;
+    const n = currentPlayers.length;
     let numImposters: number;
     if (game.imposter_random) {
       const min = Math.max(0, Math.min(game.imposter_min, n));
@@ -328,13 +316,7 @@ export function useGame() {
       imposter_clue: wordPair.imposterClue,
       current_turn_index: 0,
     }).eq('id', game.id);
-
-    // Initialize scores for this game session (in-memory)
-    initializeScores();
-    
-    // Track this word as used
-    setUsedWords(prev => new Set([...prev, wordPair.word.toLowerCase()]));
-  }, [game, isHost, players, initializeScores, usedWords]);
+  }, [game, isHost, usedWords]);
 
   const proceedToClues = useCallback(async () => {
     if (!game || !isHost) return;
@@ -343,63 +325,78 @@ export function useGame() {
 
   const submitClue = useCallback(async (clue: string) => {
     if (!game || !currentPlayerId) return;
-    
-    // For multiple rounds, we might want to store an array of clues,
-    // but the schema only has one 'clue' column. 
-    // Let's store the latest one and the UI will show it.
+
+    // Write this player's clue to the DB
     await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
 
-    const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, clue } : p);
-    const allSubmittedInThisRound = updatedPlayers.every(p => p.clue);
+    // Fetch fresh player state from DB to avoid stale-closure issues
+    const { data: freshPlayers } = await supabase
+      .from('players')
+      .select('*')
+      .eq('game_id', game.id);
+
+    if (!freshPlayers) return;
+
+    const totalTurns = (game.clue_rounds || 1) * freshPlayers.length;
+    const currentTurnIndex = game.current_turn_index ?? 0;
+    const currentRound = Math.floor(currentTurnIndex / freshPlayers.length);
+    const turnInRound = currentTurnIndex % freshPlayers.length;
+
+    // Check if every player in this round has submitted a clue
+    // Players are sorted by turn_order; those up to and including turnInRound should have clues
+    const sortedFresh = [...freshPlayers].sort(
+      (a, b) => (a.turn_order ?? 0) - (b.turn_order ?? 0)
+    );
+    const allSubmittedInThisRound = sortedFresh.every(p => p.clue !== null && p.clue !== '');
 
     if (allSubmittedInThisRound) {
-      const currentTurnIndex = game.current_turn_index || 0;
-      const totalTurnsNeeded = players.length * (game.clue_rounds || 1);
-      
-      if (currentTurnIndex + 1 >= totalTurnsNeeded) {
+      const nextTurnIndex = (currentRound + 1) * freshPlayers.length;
+
+      if (nextTurnIndex >= totalTurns) {
+        // All rounds complete — move to voting
         await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
       } else {
-        // Reset clues for the next round if we want them to submit again?
-        // Actually, the current turn-based system waits for each player.
-        // If we want multiple rounds, we just keep incrementing current_turn_index.
-        // The CluePhaseScreen should handle showing the correct state.
-        await supabase.from('games').update({
-          current_turn_index: currentTurnIndex + 1
-        }).eq('id', game.id);
-        
-        // Clear all clues for the next round
-        for (const p of players) {
+        // Start the next clue round: clear all clues and set turn index to start of next round
+        for (const p of freshPlayers) {
           await supabase.from('players').update({ clue: null }).eq('id', p.id);
         }
+        await supabase.from('games').update({
+          current_turn_index: nextTurnIndex,
+        }).eq('id', game.id);
       }
     } else {
+      // Advance to the next player's turn within this round
       await supabase.from('games').update({
-        current_turn_index: (game.current_turn_index || 0) + 1
+        current_turn_index: currentTurnIndex + 1,
       }).eq('id', game.id);
     }
-  }, [game, currentPlayerId, players]);
+  }, [game, currentPlayerId]);
 
   const submitVote = useCallback(async (votedPlayerId: string | null) => {
     if (!game || !currentPlayerId) return;
-    
-    await supabase.from('players').update({ 
+
+    await supabase.from('players').update({
       vote_for: votedPlayerId,
-      has_voted: true 
+      has_voted: true,
     }).eq('id', currentPlayerId);
 
-    const { data: freshPlayers } = await supabase.from('players').select('*').eq('game_id', game.id);
+    const { data: freshPlayers } = await supabase
+      .from('players')
+      .select('*')
+      .eq('game_id', game.id);
+
     if (freshPlayers) {
       const allVoted = freshPlayers.every(p => p.has_voted);
       if (allVoted) {
         await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
-        updateScores();
       }
     }
-  }, [game, currentPlayerId, updateScores]);
+  }, [game, currentPlayerId]);
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
-    for (const p of players) {
+    const currentPlayers = playersRef.current;
+    for (const p of currentPlayers) {
       await supabase.from('players').update({
         is_imposter: false,
         clue: null,
@@ -414,12 +411,25 @@ export function useGame() {
       imposter_clue: null,
       current_turn_index: 0,
     }).eq('id', game.id);
-    // Keep used words tracking across rounds in the same session
-  }, [game, isHost, players]);
+  }, [game, isHost]);
 
   return {
-    game, players, sessionScores, currentPlayer, currentPlayerId, isHost, loading, error,
-    createGame, joinGame, startGame, proceedToClues, submitClue, submitVote, playAgain,
-    updateSettings, setError, initializeScores, updateScores,
+    game,
+    players,
+    sessionScores,
+    currentPlayer,
+    currentPlayerId,
+    isHost,
+    loading,
+    error,
+    createGame,
+    joinGame,
+    startGame,
+    proceedToClues,
+    submitClue,
+    submitVote,
+    playAgain,
+    updateSettings,
+    setError,
   };
 }

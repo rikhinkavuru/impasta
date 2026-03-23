@@ -27,15 +27,52 @@ export default function Index() {
 
   switch (game.phase) {
     case 'lobby':
-      return <LobbyScreen game={game} players={players} isHost={isHost} onStartGame={startGame} onUpdateSettings={updateSettings} />;
+      return (
+        <LobbyScreen
+          game={game}
+          players={players}
+          isHost={isHost}
+          onStartGame={startGame}
+          onUpdateSettings={updateSettings}
+        />
+      );
     case 'role_reveal':
-      return <RoleRevealScreen game={game} currentPlayer={currentPlayer} isHost={isHost} onProceed={proceedToClues} />;
+      return (
+        <RoleRevealScreen
+          game={game}
+          currentPlayer={currentPlayer}
+          isHost={isHost}
+          onProceed={proceedToClues}
+        />
+      );
     case 'clue_giving':
-      return <CluePhaseScreen game={game} players={players} currentPlayer={currentPlayer} onSubmitClue={submitClue} />;
+      return (
+        <CluePhaseScreen
+          game={game}
+          players={players}
+          currentPlayer={currentPlayer}
+          onSubmitClue={submitClue}
+        />
+      );
     case 'voting':
-      return <VotingScreen game={game} players={players} currentPlayer={currentPlayer} onVote={submitVote} />;
+      return (
+        <VotingScreen
+          players={players}
+          currentPlayer={currentPlayer}
+          onVote={submitVote}
+        />
+      );
     case 'results':
-      return <ResultsScreen game={game} players={players} sessionScores={sessionScores} currentPlayer={currentPlayer} isHost={isHost} onPlayAgain={playAgain} />;
+      return (
+        <ResultsScreen
+          game={game}
+          players={players}
+          sessionScores={sessionScores}
+          currentPlayer={currentPlayer}
+          isHost={isHost}
+          onPlayAgain={playAgain}
+        />
+      );
     default:
       return null;
   }

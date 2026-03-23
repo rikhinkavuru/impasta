@@ -24,19 +24,15 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
 
   const maxVotes = Math.max(...Object.values(voteCounts), 0);
   const mostVotedIds = Object.entries(voteCounts)
-    .filter(([_, v]) => v === maxVotes && v > 0)
-    .map(([id, _]) => id);
+    .filter(([, v]) => v === maxVotes && v > 0)
+    .map(([id]) => id);
 
-  // Determine outcome:
-  // 1. If exactly one person is most voted AND they are an imposter, Civilians win.
-  // 2. Otherwise (tie, wrong person, or no votes), Imposters win.
+  // Civilians win only if exactly one person received the most votes AND they are an imposter.
+  // All other outcomes (tie, wrong person, no votes) are an imposter win.
   const imposterCaught = mostVotedIds.length === 1 && imposterIds.has(mostVotedIds[0]);
   const civiliansWon = imposterCaught;
 
-  const resultTitle = civiliansWon
-    ? 'CIVILIANS WIN!'
-    : 'IMPOSTERS WIN!';
-
+  const resultTitle = civiliansWon ? 'CIVILIANS WIN!' : 'IMPOSTERS WIN!';
   const resultSubtitle = civiliansWon
     ? `${imposters.map(p => p.name).join(', ')} ${imposters.length > 1 ? 'were' : 'was'} caught!`
     : mostVotedIds.length > 1
@@ -48,10 +44,13 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
   // Sort scores for leaderboard
   const sortedScores = [...sessionScores].sort((a, b) => b.score - a.score);
 
+  // Count skip votes (voted but chose nobody)
+  const skipVotes = players.filter(p => p.has_voted && p.vote_for === null).length;
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
       <div className="w-full max-w-md space-y-12 animate-fade-in-up">
-        
+
         {/* Cinematic Reveal Section */}
         <div className="text-center space-y-8 animate-scale-in">
           <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full premium-shadow ${
@@ -62,7 +61,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
               : <Skull className="w-16 h-16 text-destructive animate-float" />
             }
           </div>
-          
+
           <div className="space-y-4">
             <h2 className={`text-5xl font-extrabold tracking-tighter ${
               civiliansWon ? 'text-primary' : 'text-destructive'
@@ -74,7 +73,10 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
         </div>
 
         {/* Word reveal */}
-        <div className="p-8 rounded-[3rem] bg-white premium-shadow border border-border/50 text-center space-y-4 animate-fade-in-up" style={{ animationDelay: '200ms' }}>
+        <div
+          className="p-8 rounded-[3rem] bg-white premium-shadow border border-border/50 text-center space-y-4 animate-fade-in-up"
+          style={{ animationDelay: '200ms' }}
+        >
           <div className="space-y-2">
             <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">The Secret Word</p>
             <p className="text-4xl font-extrabold tracking-tighter text-foreground uppercase">{game.word}</p>
@@ -93,7 +95,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
             {players.map((player) => {
               const votes = voteCounts[player.id] || 0;
               const isMostVoted = mostVotedIds.includes(player.id);
-              
+
               return (
                 <div
                   key={player.id}
@@ -116,7 +118,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                       )}
                     </p>
                     {player.clue && (
-                      <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">"{player.clue}"</p>
+                      <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">&ldquo;{player.clue}&rdquo;</p>
                     )}
                   </div>
                   <div className="text-right">
@@ -128,25 +130,23 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                 </div>
               );
             })}
-            {/* Show skip votes count */}
-            {(() => {
-              const skipVotes = players.filter(p => p.has_voted && p.vote_for === null).length;
-              return skipVotes > 0 ? (
-                <div className="flex items-center gap-4 px-6 py-4 rounded-[2rem] border bg-white/50 premium-shadow border-border/50">
-                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold bg-muted/20 text-muted-foreground">
-                    ∅
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-extrabold tracking-tight uppercase text-muted-foreground">Nobody</p>
-                    <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">Skip votes</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-lg font-black tabular-nums text-muted-foreground">{skipVotes}</p>
-                    <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">VOTES</p>
-                  </div>
+
+            {/* Skip votes row */}
+            {skipVotes > 0 && (
+              <div className="flex items-center gap-4 px-6 py-4 rounded-[2rem] border bg-white/50 premium-shadow border-border/50">
+                <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold bg-muted/20 text-muted-foreground">
+                  ∅
                 </div>
-              ) : null;
-            })()}
+                <div className="flex-1">
+                  <p className="text-sm font-extrabold tracking-tight uppercase text-muted-foreground">Nobody</p>
+                  <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">Skip votes</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-lg font-black tabular-nums text-muted-foreground">{skipVotes}</p>
+                  <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">VOTES</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -161,13 +161,17 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
               {sortedScores.map((score, index) => {
                 const player = players.find(p => p.id === score.player_id);
                 if (!player) return null;
-                
+
+                const isCurrentPlayer = score.player_id === currentPlayer.id;
+
                 return (
                   <div
                     key={score.id}
                     className={`flex items-center gap-4 px-6 py-4 rounded-[2rem] border ${
                       index === 0
                         ? 'bg-primary text-primary-foreground accent-glow border-primary'
+                        : isCurrentPlayer
+                        ? 'bg-primary/5 border-primary/30 premium-shadow'
                         : 'bg-white premium-shadow border-border/50'
                     }`}
                   >
@@ -177,9 +181,14 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : index + 1}
                     </div>
                     <div className="flex-1">
-                      <p className="text-sm font-extrabold tracking-tight uppercase">{player.name}</p>
+                      <p className="text-sm font-extrabold tracking-tight uppercase">
+                        {player.name}
+                        {isCurrentPlayer && (
+                          <span className="ml-2 text-[10px] opacity-60">YOU</span>
+                        )}
+                      </p>
                       <p className={`text-[10px] font-bold tracking-tight uppercase ${index === 0 ? 'text-primary-foreground/60' : 'text-muted-foreground'}`}>
-                        {score.rounds_won} WON • {score.correct_votes} CORRECT
+                        {score.rounds_won} WON &bull; {score.correct_votes} CORRECT
                       </p>
                     </div>
                     <div className="text-right">
