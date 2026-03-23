@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash } from 'lucide-react';
+import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash, MessageSquare } from 'lucide-react';
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
 import { cn } from '@/lib/utils';
@@ -33,6 +33,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
   );
   const [imposterMin, setImposterMin] = useState<number>(game.imposter_min ?? 1);
   const [imposterMax, setImposterMax] = useState<number>(game.imposter_max ?? 1);
+  const [clueRounds, setClueRounds] = useState<number>(game.clue_rounds ?? 1);
 
   // Synchronize local state with remote game data, but only if not host to avoid feedback loops
   // or if it's the first load.
@@ -49,7 +50,8 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     setImposterMin(game.imposter_min ?? 1);
     setImposterMax(game.imposter_max ?? 1);
     setFixedCount(game.imposter_min ?? 1);
-  }, [game.difficulty, game.imposter_min, game.imposter_max, game.imposter_random, isHost]);
+    setClueRounds(game.clue_rounds ?? 1);
+  }, [game.difficulty, game.imposter_min, game.imposter_max, game.imposter_random, game.clue_rounds, isHost]);
 
   useEffect(() => {
     if (!isHost) return;
@@ -57,10 +59,10 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     if (imposterRandom) {
       const min = Math.max(0, Math.min(imposterMin, n));
       const max = Math.max(min, Math.min(imposterMax, n));
-      onUpdateSettings({ difficulty, imposterRandom: true, imposterMin: min, imposterMax: max });
+      onUpdateSettings({ difficulty, imposterRandom: true, imposterMin: min, imposterMax: max, clueRounds });
     } else {
       const c = Math.min(Math.max(0, fixedCount), n);
-      onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c });
+      onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c, clueRounds });
     }
   }, [
     difficulty,
@@ -68,6 +70,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     imposterMin,
     imposterMax,
     fixedCount,
+    clueRounds,
     isHost,
     onUpdateSettings,
     players.length,
@@ -158,6 +161,27 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                         }`}
                       >
                         {d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Clue Rounds */}
+                <div className="space-y-4">
+                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Clue Rounds</p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[1, 2, 3].map((r) => (
+                      <button
+                        key={r}
+                        type="button"
+                        onClick={() => setClueRounds(r)}
+                        className={cn(
+                          'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
+                          clueRounds === r ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
+                        )}
+                      >
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        {r}
                       </button>
                     ))}
                   </div>

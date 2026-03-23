@@ -12,7 +12,7 @@ interface VotingScreenProps {
 export default function VotingScreen({ game, players, currentPlayer, onVote }: VotingScreenProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [skipVote, setSkipVote] = useState(false);
-  const hasVoted = !!currentPlayer.vote_for;
+  const hasVoted = !!currentPlayer.has_voted;
 
   const handleVote = () => {
     if (skipVote) {
@@ -22,7 +22,7 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
     }
   };
 
-  const votedCount = players.filter(p => p.vote_for).length;
+  const votedCount = players.filter(p => p.has_voted).length;
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
@@ -86,11 +86,13 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
                     {player.name}
                     {isSelf && <span className="ml-2 text-[10px] opacity-60">YOU</span>}
                   </p>
-                  <p className={`text-sm font-extrabold tracking-tight uppercase italic ${
-                    isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                  }`}>
-                    "{player.clue}"
-                  </p>
+                  {player.clue && (
+                    <p className={`text-sm font-extrabold tracking-tight uppercase italic ${
+                      isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                    }`}>
+                      "{player.clue}"
+                    </p>
+                  )}
                 </div>
               </button>
             );

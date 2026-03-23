@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { MessageCircle, Check, ArrowRight } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 
@@ -12,9 +12,20 @@ interface CluePhaseScreenProps {
 export default function CluePhaseScreen({ game, players, currentPlayer, onSubmitClue }: CluePhaseScreenProps) {
   const [clue, setClue] = useState('');
   const sortedPlayers = [...players].sort((a, b) => (a.turn_order ?? 0) - (b.turn_order ?? 0));
-  const activePlayer = sortedPlayers[game.current_turn_index];
+  
+  const totalTurns = (game.clue_rounds || 1) * players.length;
+  const currentTurn = game.current_turn_index || 0;
+  const currentRound = Math.floor(currentTurn / players.length) + 1;
+  const turnInRound = currentTurn % players.length;
+  
+  const activePlayer = sortedPlayers[turnInRound];
   const isMyTurn = activePlayer?.id === currentPlayer.id;
-  const hasSubmitted = !!currentPlayer.clue;
+  const hasSubmittedThisTurn = !!currentPlayer.clue;
+
+  // Clear local input when turn changes
+  useEffect(() => {
+    setClue('');
+  }, [currentTurn]);
 
   const handleSubmit = () => {
     if (!clue.trim()) return;
@@ -26,7 +37,9 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
       <div className="w-full max-w-md space-y-12 animate-fade-in-up">
         
         <div className="text-center space-y-4">
-          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Clue Round</p>
+          <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
+            Clue Round {currentRound} / {game.clue_rounds || 1}
+          </p>
           <h2 className="text-2xl font-extrabold tracking-tight text-foreground">
             {isMyTurn ? 'IT\'S YOUR TURN' : `WAITING FOR ${activePlayer?.name.toUpperCase()}`}
           </h2>
@@ -36,8 +49,9 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
         {/* Turn list */}
         <div className="space-y-3">
           {sortedPlayers.map((player, i) => {
-            const isActive = i === game.current_turn_index && !player.clue;
-            const isDone = !!player.clue;
+            const isActive = i === turnInRound;
+            const isDone = i < turnInRound || (i === turnInRound && !!player.clue);
+            
             return (
               <div
                 key={player.id}
@@ -63,7 +77,7 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
                   </span>
                 </div>
 
-                {isDone && (
+                {player.clue && (
                   <span className="text-sm font-extrabold tracking-tight text-foreground uppercase">
                     "{player.clue}"
                   </span>
@@ -74,7 +88,7 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
         </div>
 
         {/* Input for current turn */}
-        {isMyTurn && !hasSubmitted && (
+        {isMyTurn && !hasSubmittedThisTurn && (
           <div className="space-y-6 animate-scale-in p-8 rounded-[3rem] bg-white premium-shadow border border-border/50">
             <div className="space-y-4">
               <label className="block text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Your Clue</label>
@@ -99,7 +113,7 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
           </div>
         )}
 
-        {hasSubmitted && !isMyTurn && (
+        {hasSubmittedThisTurn && !isMyTurn && (
           <div className="text-center py-6 space-y-4">
             <div className="inline-flex gap-1">
               <div className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: '0ms' }} />

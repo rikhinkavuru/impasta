@@ -21,6 +21,10 @@ export interface Game {
   current_turn_index: number;
   difficulty: Difficulty;
   imposter_count: number;
+  imposter_min: number;
+  imposter_max: number;
+  imposter_random: boolean;
+  clue_rounds: number;
 }
 
 export interface Player {
@@ -32,6 +36,7 @@ export interface Player {
   clue: string | null;
   vote_for: string | null; // null means skip vote, string means voted for that player
   turn_order: number | null;
+  has_voted: boolean;
 }
 
 export interface SessionScore {
@@ -44,7 +49,10 @@ export interface SessionScore {
 
 export interface GameSettings {
   difficulty: Difficulty;
-  imposterCount: number; // -1 means random
+  imposterRandom: boolean;
+  imposterMin: number;
+  imposterMax: number;
+  clueRounds?: number;
 }
 
 export function useGame() {
@@ -133,11 +141,20 @@ export function useGame() {
     });
 
     const maxVotes = Math.max(...Object.values(voteCounts), 0);
-    const mostVotedPlayer = maxVotes > 0
-      ? players.find(p => p.id === Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0])
-      : null;
+    // Find ALL players who received the maximum number of votes
+    const mostVotedIds = Object.entries(voteCounts)
+      .filter(([_, v]) => v === maxVotes && v > 0)
+      .map(([id, _]) => id);
 
-    const civiliansWon = mostVotedPlayer && mostVotedPlayer.is_imposter;
+    // Outcome logic:
+    // 1. If multiple people are tied for most votes, nobody is eliminated (Imposters win/get away)
+    // 2. If exactly one person is most voted, and they are an imposter, Civilians win
+    // 3. If exactly one person is most voted, and they are NOT an imposter, Imposters win
+    // 4. If nobody received any votes, Imposters win
+    
+    const imposterCaught = mostVotedIds.length === 1 && players.find(p => p.id === mostVotedIds[0])?.is_imposter;
+    const civiliansWon = imposterCaught;
+    const impostersWon = !imposterCaught;
 
     setSessionScores(prev => {
       return prev.map(score => {
@@ -148,17 +165,24 @@ export function useGame() {
         let roundsWonIncrement = 0;
         let correctVotesIncrement = 0;
 
-        // Check if player won the round
-        if ((civiliansWon && !player.is_imposter) || (!civiliansWon && player.is_imposter)) {
-          pointsToAdd += 2;
-          roundsWonIncrement = 1;
+        // Points for winning the round
+        if (player.is_imposter) {
+          if (impostersWon) {
+            pointsToAdd += 10; // Imposters get big points for winning
+            roundsWonIncrement = 1;
+          }
+        } else {
+          if (civiliansWon) {
+            pointsToAdd += 5; // Civilians get points for catching imposter
+            roundsWonIncrement = 1;
+          }
         }
 
-        // Only NON-imposters can earn "correct vote" points (voting for an imposter)
+        // Points for correct individual vote (only for civilians)
         if (!player.is_imposter && player.vote_for) {
           const votedPlayer = players.find(p => p.id === player.vote_for);
           if (votedPlayer && votedPlayer.is_imposter) {
-            pointsToAdd += 1;
+            pointsToAdd += 3; // Bonus for voting correctly
             correctVotesIncrement = 1;
           }
         }
@@ -239,7 +263,10 @@ export function useGame() {
     if (!game || !isHost) return;
     await supabase.from('games').update({
       difficulty: settings.difficulty,
-      imposter_count: settings.imposterCount,
+      imposter_random: settings.imposterRandom,
+      imposter_min: settings.imposterMin,
+      imposter_max: settings.imposterMax,
+      clue_rounds: settings.clueRounds ?? 1,
     }).eq('id', game.id);
   }, [game, isHost]);
 
@@ -275,11 +302,12 @@ export function useGame() {
 
     const n = players.length;
     let numImposters: number;
-    if (game.imposter_count < 0) {
-      // Random: pick between 0 and n
-      numImposters = Math.floor(Math.random() * (n + 1));
+    if (game.imposter_random) {
+      const min = Math.max(0, Math.min(game.imposter_min, n));
+      const max = Math.max(min, Math.min(game.imposter_max, n));
+      numImposters = Math.floor(Math.random() * (max - min + 1)) + min;
     } else {
-      numImposters = Math.min(game.imposter_count, n);
+      numImposters = Math.min(game.imposter_min, n);
     }
 
     const imposterIds = new Set(imposterPickOrder.slice(0, numImposters));
@@ -290,6 +318,7 @@ export function useGame() {
         is_imposter: imposterIds.has(clueOrder[i]),
         clue: null,
         vote_for: null,
+        has_voted: false,
       }).eq('id', clueOrder[i]);
     }
 
@@ -314,13 +343,35 @@ export function useGame() {
 
   const submitClue = useCallback(async (clue: string) => {
     if (!game || !currentPlayerId) return;
+    
+    // For multiple rounds, we might want to store an array of clues,
+    // but the schema only has one 'clue' column. 
+    // Let's store the latest one and the UI will show it.
     await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
 
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, clue } : p);
-    const allSubmitted = updatedPlayers.every(p => p.clue);
+    const allSubmittedInThisRound = updatedPlayers.every(p => p.clue);
 
-    if (allSubmitted) {
-      await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
+    if (allSubmittedInThisRound) {
+      const currentTurnIndex = game.current_turn_index || 0;
+      const totalTurnsNeeded = players.length * (game.clue_rounds || 1);
+      
+      if (currentTurnIndex + 1 >= totalTurnsNeeded) {
+        await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
+      } else {
+        // Reset clues for the next round if we want them to submit again?
+        // Actually, the current turn-based system waits for each player.
+        // If we want multiple rounds, we just keep incrementing current_turn_index.
+        // The CluePhaseScreen should handle showing the correct state.
+        await supabase.from('games').update({
+          current_turn_index: currentTurnIndex + 1
+        }).eq('id', game.id);
+        
+        // Clear all clues for the next round
+        for (const p of players) {
+          await supabase.from('players').update({ clue: null }).eq('id', p.id);
+        }
+      }
     } else {
       await supabase.from('games').update({
         current_turn_index: (game.current_turn_index || 0) + 1
@@ -330,14 +381,15 @@ export function useGame() {
 
   const submitVote = useCallback(async (votedPlayerId: string | null) => {
     if (!game || !currentPlayerId) return;
-    await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
+    
+    await supabase.from('players').update({ 
+      vote_for: votedPlayerId,
+      has_voted: true 
+    }).eq('id', currentPlayerId);
 
-    const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, vote_for: votedPlayerId } : p);
-    // Check if all players have submitted their vote (vote_for is set, even if null for skip votes)
-    // We need to fetch fresh data to see if everyone has voted
     const { data: freshPlayers } = await supabase.from('players').select('*').eq('game_id', game.id);
     if (freshPlayers) {
-      const allVoted = freshPlayers.every(p => p.vote_for !== undefined);
+      const allVoted = freshPlayers.every(p => p.has_voted);
       if (allVoted) {
         await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
         updateScores();
@@ -353,6 +405,7 @@ export function useGame() {
         clue: null,
         vote_for: null,
         turn_order: null,
+        has_voted: false,
       }).eq('id', p.id);
     }
     await supabase.from('games').update({

@@ -23,25 +23,30 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
   });
 
   const maxVotes = Math.max(...Object.values(voteCounts), 0);
-  const mostVotedId = Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0];
+  const mostVotedIds = Object.entries(voteCounts)
+    .filter(([_, v]) => v === maxVotes && v > 0)
+    .map(([id, _]) => id);
 
-  // Determine outcome
-  const noImposters = imposters.length === 0;
-  const imposterCaught = !noImposters && mostVotedId != null && imposterIds.has(mostVotedId);
+  // Determine outcome:
+  // 1. If exactly one person is most voted AND they are an imposter, Civilians win.
+  // 2. Otherwise (tie, wrong person, or no votes), Imposters win.
+  const imposterCaught = mostVotedIds.length === 1 && imposterIds.has(mostVotedIds[0]);
+  const civiliansWon = imposterCaught;
 
-  const resultTitle = noImposters
-    ? 'NO IMPOSTERS!'
-    : imposterCaught
+  const resultTitle = civiliansWon
     ? 'CIVILIANS WIN!'
-    : imposters.length > 1
-    ? 'IMPOSTERS WIN!'
-    : 'IMPOSTER WINS!';
+    : 'IMPOSTERS WIN!';
 
-  const resultSubtitle = noImposters
-    ? 'There were no imposters this round.'
-    : imposterCaught
+  const resultSubtitle = civiliansWon
     ? `${imposters.map(p => p.name).join(', ')} ${imposters.length > 1 ? 'were' : 'was'} caught!`
-    : `${imposters.map(p => p.name).join(', ')} got away with it!`;
+    : mostVotedIds.length > 1
+    ? 'A tie in voting allowed the imposters to escape!'
+    : maxVotes === 0
+    ? 'Nobody voted, and the imposters got away!'
+    : 'The wrong person was eliminated!';
+
+  // Sort scores for leaderboard
+  const sortedScores = [...sessionScores].sort((a, b) => b.score - a.score);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-6 bg-background pt-16">
@@ -50,9 +55,9 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
         {/* Cinematic Reveal Section */}
         <div className="text-center space-y-8 animate-scale-in">
           <div className={`inline-flex items-center justify-center w-32 h-32 rounded-full premium-shadow ${
-            imposterCaught || noImposters ? 'bg-primary/10' : 'bg-destructive/10'
+            civiliansWon ? 'bg-primary/10' : 'bg-destructive/10'
           }`}>
-            {imposterCaught || noImposters
+            {civiliansWon
               ? <Trophy className="w-16 h-16 text-primary animate-bounce" />
               : <Skull className="w-16 h-16 text-destructive animate-float" />
             }
@@ -60,7 +65,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
           
           <div className="space-y-4">
             <h2 className={`text-5xl font-extrabold tracking-tighter ${
-              imposterCaught || noImposters ? 'text-primary' : 'text-destructive'
+              civiliansWon ? 'text-primary' : 'text-destructive'
             }`}>
               {resultTitle}
             </h2>
@@ -87,6 +92,8 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
           <div className="grid grid-cols-1 gap-3">
             {players.map((player) => {
               const votes = voteCounts[player.id] || 0;
+              const isMostVoted = mostVotedIds.includes(player.id);
+              
               return (
                 <div
                   key={player.id}
@@ -94,7 +101,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                     player.is_imposter
                       ? 'bg-destructive/5 border-destructive/20'
                       : 'bg-white premium-shadow border-border/50'
-                  }`}
+                  } ${isMostVoted ? 'ring-2 ring-primary ring-offset-2' : ''}`}
                 >
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold ${
                     player.is_imposter ? 'bg-destructive/20 text-destructive' : 'bg-primary/10 text-primary'
@@ -108,10 +115,12 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                         <span className="ml-2 text-[10px] font-black text-destructive tracking-widest">IMPOSTER</span>
                       )}
                     </p>
-                    <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">"{player.clue}"</p>
+                    {player.clue && (
+                      <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">"{player.clue}"</p>
+                    )}
                   </div>
                   <div className="text-right">
-                    <p className={`text-lg font-black tabular-nums ${votes === maxVotes && votes > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
+                    <p className={`text-lg font-black tabular-nums ${isMostVoted ? 'text-primary' : 'text-muted-foreground'}`}>
                       {votes}
                     </p>
                     <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">VOTES</p>
@@ -121,7 +130,7 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
             })}
             {/* Show skip votes count */}
             {(() => {
-              const skipVotes = players.filter(p => p.vote_for === null).length;
+              const skipVotes = players.filter(p => p.has_voted && p.vote_for === null).length;
               return skipVotes > 0 ? (
                 <div className="flex items-center gap-4 px-6 py-4 rounded-[2rem] border bg-white/50 premium-shadow border-border/50">
                   <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold bg-muted/20 text-muted-foreground">
@@ -141,15 +150,15 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
           </div>
         </div>
 
-        {/* Session Leaderboard - Visible to ALL participants */}
-        {sessionScores.length > 0 && (
+        {/* Session Leaderboard */}
+        {sortedScores.length > 0 && (
           <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '600ms' }}>
             <div className="flex items-center justify-center gap-3 text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">
               <Medal className="w-3.5 h-3.5" />
               Leaderboard
             </div>
             <div className="grid grid-cols-1 gap-3">
-              {sessionScores.map((score, index) => {
+              {sortedScores.map((score, index) => {
                 const player = players.find(p => p.id === score.player_id);
                 if (!player) return null;
                 
