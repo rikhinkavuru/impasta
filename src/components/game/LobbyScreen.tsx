@@ -18,33 +18,60 @@ const difficultyDescriptions: Record<Difficulty, string> = {
   hard: 'Clue is loosely connected',
 };
 
+function inferImposterRandom(g: Game): boolean {
+  if (typeof g.imposter_random === 'boolean') return g.imposter_random;
+  return g.imposter_min !== g.imposter_max;
+}
+
 export default function LobbyScreen({ game, players, isHost, onStartGame, onUpdateSettings }: LobbyScreenProps) {
   const [copied, setCopied] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [difficulty, setDifficulty] = useState<Difficulty>((game.difficulty as Difficulty) || 'medium');
-  const [imposterRandom, setImposterRandom] = useState(() => game.imposter_count < 0);
+  const [imposterRandom, setImposterRandom] = useState(() => inferImposterRandom(game));
   const [fixedCount, setFixedCount] = useState(() =>
-    game.imposter_count < 0 ? 1 : Math.min(game.imposter_count, players.length || 1),
+    inferImposterRandom(game) ? 1 : Math.min(game.imposter_min ?? 1, players.length || 1),
   );
+  const [imposterMin, setImposterMin] = useState<number>(game.imposter_min ?? 1);
+  const [imposterMax, setImposterMax] = useState<number>(game.imposter_max ?? 1);
 
+  // Synchronize local state with remote game data, but only if not host to avoid feedback loops
+  // or if it's the first load.
   useEffect(() => {
+    if (isHost && showSettings) return; // Don't overwrite host's active editing
+
     setDifficulty((game.difficulty as Difficulty) || 'medium');
-    const random = game.imposter_count < 0;
+    const random =
+      typeof game.imposter_random === 'boolean'
+        ? game.imposter_random
+        : game.imposter_min !== game.imposter_max;
+    
     setImposterRandom(random);
-    if (!random) {
-      setFixedCount(Math.min(game.imposter_count, players.length));
-    }
-  }, [game.difficulty, game.imposter_count, players.length]);
+    setImposterMin(game.imposter_min ?? 1);
+    setImposterMax(game.imposter_max ?? 1);
+    setFixedCount(game.imposter_min ?? 1);
+  }, [game.difficulty, game.imposter_min, game.imposter_max, game.imposter_random, isHost]);
 
   useEffect(() => {
     if (!isHost) return;
+    const n = players.length;
     if (imposterRandom) {
-      onUpdateSettings({ difficulty, imposterCount: -1 });
+      const min = Math.max(0, Math.min(imposterMin, n));
+      const max = Math.max(min, Math.min(imposterMax, n));
+      onUpdateSettings({ difficulty, imposterRandom: true, imposterMin: min, imposterMax: max });
     } else {
-      const c = Math.min(Math.max(0, fixedCount), players.length);
-      onUpdateSettings({ difficulty, imposterCount: c });
+      const c = Math.min(Math.max(0, fixedCount), n);
+      onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c });
     }
-  }, [difficulty, imposterRandom, fixedCount, isHost, onUpdateSettings, players.length]);
+  }, [
+    difficulty,
+    imposterRandom,
+    imposterMin,
+    imposterMax,
+    fixedCount,
+    isHost,
+    onUpdateSettings,
+    players.length,
+  ]);
 
   const copyCode = async () => {
     await navigator.clipboard.writeText(game.code);
@@ -165,12 +192,12 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                   </div>
                 </div>
 
-                {/* Fixed Count */}
-                {!imposterRandom && (
+                {/* Fixed Count or Random Range */}
+                {!imposterRandom ? (
                   <div className="space-y-4">
                     <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Count</p>
                     <div className="flex flex-wrap gap-2">
-                      {Array.from({ length: Math.min(playerCount + 1, 6) }, (_, i) => (
+                      {Array.from({ length: Math.min(Math.max(playerCount + 1, 2), 7) }, (_, i) => (
                         <button
                           key={i}
                           type="button"
@@ -185,12 +212,44 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                       ))}
                     </div>
                   </div>
-                )}
-
-                {imposterRandom && (
-                  <p className="text-[10px] font-bold text-muted-foreground/50 text-center">
-                    A random number of imposters (0 to {playerCount}) will be chosen each round.
-                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Range</p>
+                      <span className="text-[10px] font-extrabold text-primary uppercase tracking-[0.1em]">{imposterMin} to {imposterMax}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Min</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max={playerCount}
+                          value={imposterMin}
+                          onChange={(e) => {
+                            const val = Math.max(0, Math.min(Number(e.target.value), playerCount));
+                            setImposterMin(val);
+                            if (val > imposterMax) setImposterMax(val);
+                          }}
+                          className="w-full luxury-input text-base py-2"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Max</label>
+                        <input
+                          type="number"
+                          min={imposterMin}
+                          max={playerCount}
+                          value={imposterMax}
+                          onChange={(e) => {
+                            const val = Math.max(imposterMin, Math.min(Number(e.target.value), playerCount));
+                            setImposterMax(val);
+                          }}
+                          className="w-full luxury-input text-base py-2"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
