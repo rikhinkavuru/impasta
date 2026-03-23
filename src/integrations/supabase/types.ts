@@ -24,9 +24,6 @@ export type Database = {
           id: string
           imposter_clue: string | null
           imposter_count: number
-          imposter_min: number
-          imposter_max: number
-          imposter_random: boolean
           phase: string
           word: string | null
         }
@@ -39,9 +36,6 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
-          imposter_min?: number
-          imposter_max?: number
-          imposter_random?: boolean
           phase?: string
           word?: string | null
         }
@@ -54,9 +48,6 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
-          imposter_min?: number
-          imposter_max?: number
-          imposter_random?: boolean
           phase?: string
           word?: string | null
         }
@@ -115,51 +106,6 @@ export type Database = {
           {
             foreignKeyName: "players_vote_for_fkey"
             columns: ["vote_for"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      session_scores: {
-        Row: {
-          created_at: string
-          game_id: string
-          id: string
-          player_id: string
-          score: number
-          rounds_won: number
-          correct_votes: number
-        }
-        Insert: {
-          created_at?: string
-          game_id: string
-          id?: string
-          player_id: string
-          score?: number
-          rounds_won?: number
-          correct_votes?: number
-        }
-        Update: {
-          created_at?: string
-          game_id?: string
-          id?: string
-          player_id?: string
-          score?: number
-          rounds_won?: number
-          correct_votes?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "session_scores_game_id_fkey"
-            columns: ["game_id"]
-            isOneToOne: false
-            referencedRelation: "games"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "session_scores_player_id_fkey"
-            columns: ["player_id"]
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
