@@ -20,10 +20,6 @@ export interface Game {
   current_turn_index: number;
   difficulty: Difficulty;
   imposter_count: number;
-  /** When true, count is rolled between min and max each round; when false, min and max are equal = fixed count. */
-  imposter_min: number;
-  imposter_max: number;
-  imposter_random?: boolean;
 }
 
 export interface Player {
@@ -39,19 +35,15 @@ export interface Player {
 
 export interface SessionScore {
   id: string;
-  game_id: string;
   player_id: string;
   score: number;
   rounds_won: number;
   correct_votes: number;
-  created_at: string;
 }
 
 export interface GameSettings {
   difficulty: Difficulty;
-  imposterRandom: boolean;
-  imposterMin: number;
-  imposterMax: number;
+  imposterCount: number; // -1 means random
 }
 
 export function useGame() {
@@ -78,9 +70,6 @@ export function useGame() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'players', filter: `game_id=eq.${game.id}` },
         () => { fetchPlayers(game.id); }
       )
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'session_scores', filter: `game_id=eq.${game.id}` },
-        () => { fetchSessionScores(game.id); }
-      )
       .subscribe();
 
     return () => { supabase.removeChannel(gameChannel); };
@@ -95,40 +84,31 @@ export function useGame() {
     if (data) setPlayers(data as Player[]);
   };
 
-  const fetchSessionScores = async (gameId: string) => {
-    const { data } = await supabase
-      .from('session_scores')
-      .select('*')
-      .eq('game_id', gameId)
-      .order('score', { ascending: false });
-    if (data) setSessionScores(data as SessionScore[]);
-  };
-
-  const initializeScores = useCallback(async () => {
-    if (!game || !isHost) return;
-    
-    // Create score records for all players
+  const initializeScores = useCallback(() => {
+    if (!game) return;
+    // Only initialize if we don't already have scores for these players
+    const existingIds = new Set(sessionScores.map(s => s.player_id));
+    const newScores: SessionScore[] = [];
     for (const player of players) {
-      await supabase.from('session_scores').upsert({
-        game_id: game.id,
-        player_id: player.id,
-        score: 0,
-        rounds_won: 0,
-        correct_votes: 0,
-      }, {
-        onConflict: 'game_id,player_id'
-      });
+      if (!existingIds.has(player.id)) {
+        newScores.push({
+          id: player.id,
+          player_id: player.id,
+          score: 0,
+          rounds_won: 0,
+          correct_votes: 0,
+        });
+      }
     }
-  }, [game, isHost, players]);
+    if (newScores.length > 0) {
+      setSessionScores(prev => [...prev, ...newScores]);
+    }
+  }, [game, players, sessionScores]);
 
-  const updateScores = useCallback(async () => {
+  const updateScores = useCallback(() => {
     if (!game) return;
 
-    // Calculate round results
     const imposters = players.filter(p => p.is_imposter);
-    const civilians = players.filter(p => !p.is_imposter);
-    
-    // Count votes for each player
     const voteCounts: Record<string, number> = {};
     players.forEach(p => {
       if (p.vote_for) {
@@ -136,68 +116,48 @@ export function useGame() {
       }
     });
 
-    // Find the player with the most votes
     const maxVotes = Math.max(...Object.values(voteCounts), 0);
-    const mostVotedPlayer = maxVotes > 0 ? players.find(p => p.id === Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0]) : null;
-    
-    // Determine who won this round
-    // Civilians win when most voted player is an imposter (imposter was caught)
-    // Imposters win when most voted player is a civilian (innocent person was voted out)
+    const mostVotedPlayer = maxVotes > 0
+      ? players.find(p => p.id === Object.entries(voteCounts).find(([_, v]) => v === maxVotes)?.[0])
+      : null;
+
     const civiliansWon = mostVotedPlayer && mostVotedPlayer.is_imposter;
-    const impostersWon = !civiliansWon;
 
-    console.log('Score calculation:', {
-      mostVotedPlayer: mostVotedPlayer?.name,
-      mostVotedIsImposter: mostVotedPlayer?.is_imposter,
-      civiliansWon,
-      impostersWon,
-      voteCounts,
-      players: players.map(p => ({ name: p.name, is_imposter: p.is_imposter, vote_for: p.vote_for }))
-    });
+    setSessionScores(prev => {
+      return prev.map(score => {
+        const player = players.find(p => p.id === score.player_id);
+        if (!player) return score;
 
-    // Update scores for each player
-    for (const player of players) {
-      let pointsToAdd = 0;
-      let roundsWonIncrement = 0;
-      let correctVotesIncrement = 0;
+        let pointsToAdd = 0;
+        let roundsWonIncrement = 0;
+        let correctVotesIncrement = 0;
 
-      // Check if player won the round
-      if ((civiliansWon && !player.is_imposter) || (impostersWon && player.is_imposter)) {
-        pointsToAdd += 2;
-        roundsWonIncrement = 1;
-      }
-
-      // Check if player voted correctly
-      // A correct vote means voting for someone on the opposite team
-      if (player.vote_for) {
-        const votedPlayer = players.find(p => p.id === player.vote_for);
-        if (votedPlayer && votedPlayer.is_imposter !== player.is_imposter) {
-          pointsToAdd += 1;
-          correctVotesIncrement = 1;
+        // Check if player won the round
+        if ((civiliansWon && !player.is_imposter) || (!civiliansWon && player.is_imposter)) {
+          pointsToAdd += 2;
+          roundsWonIncrement = 1;
         }
-      }
 
-      console.log(`Player ${player.name}:`, {
-        is_imposter: player.is_imposter,
-        pointsToAdd,
-        roundsWonIncrement,
-        correctVotesIncrement,
-        vote_for: player.vote_for
+        // Only NON-imposters can earn "correct vote" points (voting for an imposter)
+        if (!player.is_imposter && player.vote_for) {
+          const votedPlayer = players.find(p => p.id === player.vote_for);
+          if (votedPlayer && votedPlayer.is_imposter) {
+            pointsToAdd += 1;
+            correctVotesIncrement = 1;
+          }
+        }
+
+        if (pointsToAdd === 0) return score;
+
+        return {
+          ...score,
+          score: score.score + pointsToAdd,
+          rounds_won: score.rounds_won + roundsWonIncrement,
+          correct_votes: score.correct_votes + correctVotesIncrement,
+        };
       });
-
-      // Update the player's score
-      if (pointsToAdd > 0) {
-        const currentScore = sessionScores.find(s => s.player_id === player.id);
-        if (currentScore) {
-          await supabase.from('session_scores').update({
-            score: currentScore.score + pointsToAdd,
-            rounds_won: currentScore.rounds_won + roundsWonIncrement,
-            correct_votes: currentScore.correct_votes + correctVotesIncrement,
-          }).eq('id', currentScore.id);
-        }
-      }
-    }
-  }, [game, players, sessionScores]);
+    });
+  }, [game, players]);
 
   const createGame = useCallback(async (hostName: string) => {
     setLoading(true);
@@ -263,10 +223,7 @@ export function useGame() {
     if (!game || !isHost) return;
     await supabase.from('games').update({
       difficulty: settings.difficulty,
-      imposter_count: settings.imposterMax,
-      imposter_min: settings.imposterMin,
-      imposter_max: settings.imposterMax,
-      imposter_random: settings.imposterRandom,
+      imposter_count: settings.imposterCount,
     }).eq('id', game.id);
   }, [game, isHost]);
 
@@ -279,21 +236,17 @@ export function useGame() {
       : await getRandomWordPair(difficulty);
 
     const playerIds = players.map(p => p.id);
-    // Imposter selection and clue order must be independent shuffles, or imposters
-    // would always get the first turn_order slots (0..numImposters-1).
     const imposterPickOrder = shuffleArray(playerIds);
     const clueOrder = shuffleArray(playerIds);
 
     const n = players.length;
-    const rawMin = game.imposter_min ?? (game.imposter_count < 0 ? 0 : game.imposter_count);
-    const rawMax = game.imposter_max ?? (game.imposter_count < 0 ? n : game.imposter_count);
-    const minImposters = Math.max(0, Math.min(rawMin, n));
-    const maxImposters = Math.max(minImposters, Math.min(rawMax, n));
-    const useRandom =
-      game.imposter_random ?? minImposters !== maxImposters;
-    const numImposters = useRandom
-      ? minImposters + Math.floor(Math.random() * (maxImposters - minImposters + 1))
-      : minImposters;
+    let numImposters: number;
+    if (game.imposter_count < 0) {
+      // Random: pick between 0 and n
+      numImposters = Math.floor(Math.random() * (n + 1));
+    } else {
+      numImposters = Math.min(game.imposter_count, n);
+    }
 
     const imposterIds = new Set(imposterPickOrder.slice(0, numImposters));
 
@@ -313,8 +266,8 @@ export function useGame() {
       current_turn_index: 0,
     }).eq('id', game.id);
 
-    // Initialize scores for this game session
-    await initializeScores();
+    // Initialize scores for this game session (in-memory)
+    initializeScores();
   }, [game, isHost, players, initializeScores]);
 
   const proceedToClues = useCallback(async () => {
@@ -348,7 +301,7 @@ export function useGame() {
     if (allVoted) {
       await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
       // Update scores after voting is complete
-      await updateScores();
+      updateScores();
     }
   }, [game, currentPlayerId, players, updateScores]);
 
