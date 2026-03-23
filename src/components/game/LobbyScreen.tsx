@@ -219,7 +219,6 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                 {/* Fixed Count or Random Range */}
                 {!imposterRandom ? (
                   <div className="space-y-4">
-                    <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Count</p>
                     <div className="flex flex-wrap gap-2">
                       {Array.from({ length: Math.min(Math.max(playerCount + 1, 2), 7) }, (_, i) => (
                         <button
