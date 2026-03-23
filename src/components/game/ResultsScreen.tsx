@@ -119,10 +119,29 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                 </div>
               );
             })}
+            {/* Show skip votes count */}
+            {(() => {
+              const skipVotes = players.filter(p => p.vote_for === null).length;
+              return skipVotes > 0 ? (
+                <div className="flex items-center gap-4 px-6 py-4 rounded-[2rem] border bg-white/50 premium-shadow border-border/50">
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center text-[10px] font-extrabold bg-muted/20 text-muted-foreground">
+                    ∅
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-extrabold tracking-tight uppercase text-muted-foreground">Nobody</p>
+                    <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">Skip votes</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-black tabular-nums text-muted-foreground">{skipVotes}</p>
+                    <p className="text-[8px] font-extrabold text-muted-foreground uppercase tracking-widest">VOTES</p>
+                  </div>
+                </div>
+              ) : null;
+            })()}
           </div>
         </div>
 
-        {/* Session Leaderboard */}
+        {/* Session Leaderboard - Visible to ALL participants */}
         {sessionScores.length > 0 && (
           <div className="space-y-6 animate-fade-in-up" style={{ animationDelay: '600ms' }}>
             <div className="flex items-center justify-center gap-3 text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">

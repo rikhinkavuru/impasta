@@ -1,21 +1,25 @@
 import { useState } from 'react';
-import { Vote, Check, ShieldCheck } from 'lucide-react';
+import { Vote, Check, ShieldCheck, X } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 
 interface VotingScreenProps {
   game: Game;
   players: Player[];
   currentPlayer: Player;
-  onVote: (playerId: string) => void;
+  onVote: (playerId: string | null) => void;
 }
 
 export default function VotingScreen({ game, players, currentPlayer, onVote }: VotingScreenProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [skipVote, setSkipVote] = useState(false);
   const hasVoted = !!currentPlayer.vote_for;
 
   const handleVote = () => {
-    if (!selectedId) return;
-    onVote(selectedId);
+    if (skipVote) {
+      onVote(null);
+    } else if (selectedId) {
+      onVote(selectedId);
+    }
   };
 
   const votedCount = players.filter(p => p.vote_for).length;
@@ -36,14 +40,17 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
         <div className="grid grid-cols-1 gap-4">
           {players.map((player) => {
             const isSelf = player.id === currentPlayer.id;
-            const isSelected = selectedId === player.id;
+            const isSelected = selectedId === player.id && !skipVote;
             const isVotedFor = hasVoted && currentPlayer.vote_for === player.id;
             
             return (
               <button
                 key={player.id}
                 disabled={hasVoted || isSelf}
-                onClick={() => setSelectedId(player.id)}
+                onClick={() => {
+                  setSelectedId(player.id);
+                  setSkipVote(false);
+                }}
                 className={`group relative flex flex-col items-start gap-4 p-6 rounded-[2.5rem] border-2 transition-all duration-300 text-left ${
                   isVotedFor
                     ? 'bg-primary border-primary accent-glow'
@@ -90,11 +97,29 @@ export default function VotingScreen({ game, players, currentPlayer, onVote }: V
           })}
         </div>
 
+        {/* Skip Vote Option */}
+        {!hasVoted && (
+          <button
+            onClick={() => {
+              setSkipVote(!skipVote);
+              setSelectedId(null);
+            }}
+            className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-[2rem] border-2 transition-all ${
+              skipVote
+                ? 'bg-destructive/10 border-destructive/50 text-destructive'
+                : 'bg-white premium-shadow border-border/50 hover:border-destructive/30 text-muted-foreground'
+            }`}
+          >
+            <X className="w-4 h-4" />
+            SKIP VOTE (NOBODY)
+          </button>
+        )}
+
         {!hasVoted && (
           <button
             onClick={handleVote}
-            disabled={!selectedId}
-            className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2"
+            disabled={!selectedId && !skipVote}
+            className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             SUBMIT VOTE
             <Vote className="w-5 h-5" />

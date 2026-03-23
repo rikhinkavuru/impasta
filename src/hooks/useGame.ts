@@ -29,7 +29,7 @@ export interface Player {
   is_host: boolean;
   is_imposter: boolean;
   clue: string | null;
-  vote_for: string | null;
+  vote_for: string | null; // null means skip vote, string means voted for that player
   turn_order: number | null;
 }
 
@@ -291,19 +291,22 @@ export function useGame() {
     }
   }, [game, currentPlayerId, players]);
 
-  const submitVote = useCallback(async (votedPlayerId: string) => {
+  const submitVote = useCallback(async (votedPlayerId: string | null) => {
     if (!game || !currentPlayerId) return;
     await supabase.from('players').update({ vote_for: votedPlayerId }).eq('id', currentPlayerId);
 
     const updatedPlayers = players.map(p => p.id === currentPlayerId ? { ...p, vote_for: votedPlayerId } : p);
-    const allVoted = updatedPlayers.every(p => p.vote_for);
-
-    if (allVoted) {
-      await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
-      // Update scores after voting is complete
-      updateScores();
+    // Check if all players have submitted their vote (vote_for is set, even if null for skip votes)
+    // We need to fetch fresh data to see if everyone has voted
+    const { data: freshPlayers } = await supabase.from('players').select('*').eq('game_id', game.id);
+    if (freshPlayers) {
+      const allVoted = freshPlayers.every(p => p.vote_for !== undefined);
+      if (allVoted) {
+        await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
+        updateScores();
+      }
     }
-  }, [game, currentPlayerId, players, updateScores]);
+  }, [game, currentPlayerId, updateScores]);
 
   const playAgain = useCallback(async () => {
     if (!game || !isHost) return;
