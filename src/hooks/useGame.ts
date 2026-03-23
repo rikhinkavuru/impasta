@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
+import { generateWordPairWithAI } from '@/lib/openaiWordGenerator';
 
 function getErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -53,9 +54,24 @@ export function useGame() {
   const [currentPlayerId, setCurrentPlayerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usedWords, setUsedWords] = useState<Set<string>>(new Set());
 
   const currentPlayer = players.find(p => p.id === currentPlayerId) || null;
   const isHost = currentPlayer?.is_host ?? false;
+
+  // Track used words when game word changes
+  useEffect(() => {
+    if (game?.word) {
+      setUsedWords(prev => new Set([...prev, game.word!.toLowerCase()]));
+    }
+  }, [game?.word]);
+
+  // Reset used words when returning to lobby
+  useEffect(() => {
+    if (game?.phase === 'lobby') {
+      setUsedWords(new Set());
+    }
+  }, [game?.id, game?.phase]);
 
   useEffect(() => {
     if (!game?.id) return;
@@ -231,9 +247,27 @@ export function useGame() {
     if (!game || !isHost) return;
 
     const difficulty = (game.difficulty || 'medium') as Difficulty;
-    const wordPair = customWord && customClue
-      ? { word: customWord, imposterClue: normalizeImposterClueToOneWord(customClue) }
-      : await getRandomWordPair(difficulty);
+    let wordPair: { word: string; imposterClue: string };
+
+    if (customWord && customClue) {
+      wordPair = { word: customWord, imposterClue: normalizeImposterClueToOneWord(customClue) };
+    } else {
+      // Get word from database first
+      wordPair = await getRandomWordPair(difficulty);
+      
+      // Check if word has been used in this session
+      if (usedWords.has(wordPair.word.toLowerCase())) {
+        // Fallback to AI-generated word
+        console.log(`Word "${wordPair.word}" already used, generating new word with AI...`);
+        const aiWordPair = await generateWordPairWithAI(difficulty, usedWords);
+        if (aiWordPair) {
+          wordPair = aiWordPair;
+          console.log(`AI generated new word: "${wordPair.word}"`);
+        } else {
+          console.warn('AI generation failed, using duplicate word from database');
+        }
+      }
+    }
 
     const playerIds = players.map(p => p.id);
     const imposterPickOrder = shuffleArray(playerIds);
@@ -268,7 +302,10 @@ export function useGame() {
 
     // Initialize scores for this game session (in-memory)
     initializeScores();
-  }, [game, isHost, players, initializeScores]);
+    
+    // Track this word as used
+    setUsedWords(prev => new Set([...prev, wordPair.word.toLowerCase()]));
+  }, [game, isHost, players, initializeScores, usedWords]);
 
   const proceedToClues = useCallback(async () => {
     if (!game || !isHost) return;
@@ -324,6 +361,7 @@ export function useGame() {
       imposter_clue: null,
       current_turn_index: 0,
     }).eq('id', game.id);
+    // Keep used words tracking across rounds in the same session
   }, [game, isHost, players]);
 
   return {
