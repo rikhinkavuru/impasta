@@ -387,7 +387,7 @@ export function useGame() {
       .eq('game_id', game.id);
 
     if (freshPlayers) {
-      const allVoted = freshPlayers.every(p => p.has_voted);
+      const allVoted = freshPlayers.every(p => (p as unknown as Player).has_voted);
       if (allVoted) {
         await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
       }
