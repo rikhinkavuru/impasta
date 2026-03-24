@@ -329,16 +329,16 @@ export function useGame() {
     // Write this player's clue to the DB
     await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
 
-    // Fetch fresh player state from DB to avoid stale-closure issues
-    const { data: freshPlayers } = await supabase
-      .from('players')
-      .select('*')
-      .eq('game_id', game.id);
+    // Fetch fresh game AND player state from DB to avoid stale-closure issues
+    const [{ data: freshGame }, { data: freshPlayers }] = await Promise.all([
+      supabase.from('games').select('*').eq('id', game.id).single(),
+      supabase.from('players').select('*').eq('game_id', game.id),
+    ]);
 
-    if (!freshPlayers) return;
+    if (!freshPlayers || !freshGame) return;
 
-    const totalTurns = (game.clue_rounds || 1) * freshPlayers.length;
-    const currentTurnIndex = game.current_turn_index ?? 0;
+    const totalTurns = (freshGame.clue_rounds || 1) * freshPlayers.length;
+    const currentTurnIndex = freshGame.current_turn_index ?? 0;
     const currentRound = Math.floor(currentTurnIndex / freshPlayers.length);
     const turnInRound = currentTurnIndex % freshPlayers.length;
 
