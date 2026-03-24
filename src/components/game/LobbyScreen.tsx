@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash, MessageSquare } from 'lucide-react';
+import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash, MessageSquare, Zap, Flame, Brain } from 'lucide-react';
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
 import { cn } from '@/lib/utils';
@@ -12,15 +12,61 @@ interface LobbyScreenProps {
   onUpdateSettings: (settings: GameSettings) => void;
 }
 
-const difficultyDescriptions: Record<Difficulty, string> = {
-  easy: 'Clue is very close to the word',
-  medium: 'Clue is somewhat related',
-  hard: 'Clue is loosely connected',
+const difficultyConfig: Record<Difficulty, { icon: typeof Zap; label: string; desc: string }> = {
+  easy: { icon: Zap, label: 'Easy', desc: 'Close clue' },
+  medium: { icon: Flame, label: 'Medium', desc: 'Related clue' },
+  hard: { icon: Brain, label: 'Hard', desc: 'Loose clue' },
 };
 
 function inferImposterRandom(g: Game): boolean {
   if (typeof g.imposter_random === 'boolean') return g.imposter_random;
   return g.imposter_min !== g.imposter_max;
+}
+
+/* ── Segmented Control ── */
+function SegmentedControl<T extends string | number>({
+  options,
+  value,
+  onChange,
+  renderOption,
+}: {
+  options: T[];
+  value: T;
+  onChange: (v: T) => void;
+  renderOption: (opt: T, active: boolean) => React.ReactNode;
+}) {
+  return (
+    <div className="flex rounded-2xl bg-secondary/50 p-1 gap-0.5">
+      {options.map((opt) => {
+        const active = opt === value;
+        return (
+          <button
+            key={String(opt)}
+            type="button"
+            onClick={() => onChange(opt)}
+            className={cn(
+              'flex-1 flex items-center justify-center gap-1.5 rounded-[0.85rem] px-3 py-2.5 text-[10px] font-extrabold uppercase tracking-wider transition-all duration-200',
+              active
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {renderOption(opt, active)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Settings Row ── */
+function SettingsRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-2.5">
+      <p className="text-[9px] font-extrabold text-muted-foreground/50 uppercase tracking-[0.25em] pl-1">{label}</p>
+      {children}
+    </div>
+  );
 }
 
 export default function LobbyScreen({ game, players, isHost, onStartGame, onUpdateSettings }: LobbyScreenProps) {
@@ -35,20 +81,15 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
   const [imposterMax, setImposterMax] = useState<number>(game.imposter_max ?? 1);
   const [clueRounds, setClueRounds] = useState<number>(game.clue_rounds ?? 1);
 
-  // Track whether the host is actively editing settings to avoid overwriting their changes
   const isEditingRef = useRef(false);
 
-  // Synchronize local state from remote game data (for non-host players, or initial load)
   useEffect(() => {
-    // Don't overwrite the host's in-progress edits
     if (isHost && isEditingRef.current) return;
-
     setDifficulty((game.difficulty as Difficulty) || 'medium');
     const random =
       typeof game.imposter_random === 'boolean'
         ? game.imposter_random
         : game.imposter_min !== game.imposter_max;
-
     setImposterRandom(random);
     setImposterMin(game.imposter_min ?? 1);
     setImposterMax(game.imposter_max ?? 1);
@@ -56,14 +97,11 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
     setClueRounds(game.clue_rounds ?? 1);
   }, [game.difficulty, game.imposter_min, game.imposter_max, game.imposter_random, game.clue_rounds, isHost]);
 
-  // Push host's settings changes to the DB
-  // Use a ref to debounce and avoid firing on the initial sync from the effect above
   const settingsPushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const prevSettingsRef = useRef({ difficulty, imposterRandom, imposterMin, imposterMax, fixedCount, clueRounds });
 
   useEffect(() => {
     if (!isHost) return;
-
     const prev = prevSettingsRef.current;
     const changed =
       prev.difficulty !== difficulty ||
@@ -72,12 +110,9 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
       prev.imposterMax !== imposterMax ||
       prev.fixedCount !== fixedCount ||
       prev.clueRounds !== clueRounds;
-
     if (!changed) return;
-
     prevSettingsRef.current = { difficulty, imposterRandom, imposterMin, imposterMax, fixedCount, clueRounds };
 
-    // Debounce rapid number-input changes
     if (settingsPushTimerRef.current) clearTimeout(settingsPushTimerRef.current);
     settingsPushTimerRef.current = setTimeout(() => {
       const n = players.length;
@@ -90,7 +125,6 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
         onUpdateSettings({ difficulty, imposterRandom: false, imposterMin: c, imposterMax: c, clueRounds });
       }
     }, 300);
-
     return () => {
       if (settingsPushTimerRef.current) clearTimeout(settingsPushTimerRef.current);
     };
@@ -107,7 +141,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
   return (
     <div className="min-h-screen flex flex-col items-center justify-between p-6 bg-background overflow-hidden">
 
-      {/* Top Section: Game Code */}
+      {/* Top: Game Code */}
       <div className="w-full max-w-md pt-12 space-y-6 animate-fade-in-up">
         <div className="text-center space-y-4">
           <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Game Code</p>
@@ -123,7 +157,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
         </div>
       </div>
 
-      {/* Middle Section: Players */}
+      {/* Middle: Players */}
       <div className="flex-1 w-full max-w-2xl flex flex-wrap items-center justify-center gap-4 p-8">
         {players.map((player, i) => (
           <div
@@ -138,9 +172,7 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
               {player.name[0].toUpperCase()}
             </div>
             <span className="font-bold text-sm text-foreground tracking-tight">{player.name}</span>
-            {player.is_host && (
-              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-            )}
+            {player.is_host && <div className="w-1.5 h-1.5 rounded-full bg-primary" />}
           </div>
         ))}
         {players.length < 3 && (
@@ -150,11 +182,12 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
         )}
       </div>
 
-      {/* Bottom Section: Controls */}
-      <div className="w-full max-w-md pb-12 space-y-6 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
+      {/* Bottom: Controls */}
+      <div className="w-full max-w-md pb-12 space-y-4 animate-fade-in-up" style={{ animationDelay: '400ms' }}>
 
         {isHost && (
           <div className="space-y-4">
+            {/* Settings Toggle */}
             <button
               onClick={() => {
                 isEditingRef.current = !showSettings;
@@ -167,107 +200,91 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
               {showSettings ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
 
+            {/* Settings Panel */}
             {showSettings && (
-              <div className="space-y-6 p-6 rounded-[2rem] bg-white premium-shadow border border-border/50 animate-scale-in">
+              <div className="space-y-5 p-5 rounded-[1.5rem] bg-white/80 backdrop-blur-sm premium-shadow border border-border/30 animate-scale-in">
+
                 {/* Difficulty */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Difficulty</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['easy', 'medium', 'hard'] as Difficulty[]).map((d) => (
-                      <button
-                        key={d}
-                        onClick={() => setDifficulty(d)}
-                        title={difficultyDescriptions[d]}
-                        className={`px-4 py-3 rounded-2xl text-[10px] font-extrabold uppercase tracking-widest transition-all ${
-                          difficulty === d
-                            ? 'bg-primary text-primary-foreground accent-glow'
-                            : 'bg-secondary/40 text-muted-foreground hover:bg-secondary'
-                        }`}
-                      >
-                        {d}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <SettingsRow label="Difficulty">
+                  <SegmentedControl
+                    options={['easy', 'medium', 'hard'] as Difficulty[]}
+                    value={difficulty}
+                    onChange={setDifficulty}
+                    renderOption={(d, active) => {
+                      const cfg = difficultyConfig[d];
+                      const Icon = cfg.icon;
+                      return (
+                        <>
+                          <Icon className="w-3 h-3" />
+                          <span>{cfg.label}</span>
+                        </>
+                      );
+                    }}
+                  />
+                  <p className="text-[9px] text-muted-foreground/50 pl-1 italic">{difficultyConfig[difficulty].desc}</p>
+                </SettingsRow>
+
+                {/* Divider */}
+                <div className="h-px bg-border/40" />
 
                 {/* Clue Rounds */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Clue Rounds</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[1, 2, 3].map((r) => (
-                      <button
-                        key={r}
-                        type="button"
-                        onClick={() => setClueRounds(r)}
-                        className={cn(
-                          'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
-                          clueRounds === r ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
-                        )}
-                      >
-                        <MessageSquare className="h-3.5 w-3.5" />
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <SettingsRow label="Clue Rounds">
+                  <SegmentedControl
+                    options={[1, 2, 3]}
+                    value={clueRounds}
+                    onChange={setClueRounds}
+                    renderOption={(r) => (
+                      <>
+                        <MessageSquare className="w-3 h-3" />
+                        <span>{r}</span>
+                      </>
+                    )}
+                  />
+                </SettingsRow>
 
-                {/* Imposters Selection Mode */}
-                <div className="space-y-4">
-                  <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Imposter Selection</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setImposterRandom(false)}
-                      className={cn(
-                        'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
-                        !imposterRandom ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
-                      )}
-                    >
-                      <Hash className="h-3.5 w-3.5" />
-                      Fixed
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setImposterRandom(true)}
-                      className={cn(
-                        'flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-[10px] font-extrabold uppercase tracking-widest transition-all',
-                        imposterRandom ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
-                      )}
-                    >
-                      <Shuffle className="h-3.5 w-3.5" />
-                      Random
-                    </button>
-                  </div>
-                </div>
+                {/* Divider */}
+                <div className="h-px bg-border/40" />
 
-                {/* Fixed Count or Random Range */}
-                {!imposterRandom ? (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap gap-2">
+                {/* Imposters */}
+                <SettingsRow label="Imposters">
+                  <SegmentedControl
+                    options={['fixed', 'random'] as const}
+                    value={imposterRandom ? 'random' : 'fixed'}
+                    onChange={(v) => setImposterRandom(v === 'random')}
+                    renderOption={(opt) => (
+                      <>
+                        {opt === 'fixed' ? <Hash className="w-3 h-3" /> : <Shuffle className="w-3 h-3" />}
+                        <span>{opt === 'fixed' ? 'Fixed' : 'Random'}</span>
+                      </>
+                    )}
+                  />
+
+                  {/* Fixed count chips */}
+                  {!imposterRandom && (
+                    <div className="flex gap-1.5 pt-1">
                       {Array.from({ length: Math.min(Math.max(playerCount + 1, 2), 7) }, (_, i) => (
                         <button
                           key={i}
                           type="button"
                           onClick={() => setFixedCount(i)}
                           className={cn(
-                            'w-10 h-10 rounded-xl text-[10px] font-extrabold uppercase transition-all',
-                            fixedCount === i ? 'bg-primary text-primary-foreground' : 'bg-secondary/40 text-muted-foreground'
+                            'w-9 h-9 rounded-xl text-xs font-extrabold transition-all duration-200',
+                            fixedCount === i
+                              ? 'bg-primary text-primary-foreground shadow-sm scale-105'
+                              : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
                           )}
                         >
                           {i}
                         </button>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center">
-                      <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.2em]">Range</p>
-                      <span className="text-[10px] font-extrabold text-primary uppercase tracking-[0.1em]">{imposterMin} to {imposterMax}</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Min</label>
+                  )}
+
+                  {/* Random range */}
+                  {imposterRandom && (
+                    <div className="flex items-center gap-3 pt-1">
+                      <div className="flex-1 flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
+                        <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest">Min</span>
                         <input
                           type="number"
                           min="0"
@@ -278,11 +295,12 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                             setImposterMin(val);
                             if (val > imposterMax) setImposterMax(val);
                           }}
-                          className="w-full luxury-input text-base py-2"
+                          className="w-full bg-transparent border-0 text-center text-sm font-bold text-foreground focus:outline-none focus:ring-0"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">Max</label>
+                      <span className="text-muted-foreground/40 text-xs font-bold">—</span>
+                      <div className="flex-1 flex items-center gap-2 rounded-xl bg-secondary/50 px-3 py-2">
+                        <span className="text-[8px] font-black text-muted-foreground/50 uppercase tracking-widest">Max</span>
                         <input
                           type="number"
                           min={imposterMin}
@@ -292,12 +310,12 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
                             const val = Math.max(imposterMin, Math.min(Number(e.target.value), playerCount));
                             setImposterMax(val);
                           }}
-                          className="w-full luxury-input text-base py-2"
+                          className="w-full bg-transparent border-0 text-center text-sm font-bold text-foreground focus:outline-none focus:ring-0"
                         />
                       </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </SettingsRow>
               </div>
             )}
 
