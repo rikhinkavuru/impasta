@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       games: {
         Row: {
+          clue_rounds: number
           code: string
           created_at: string
           current_turn_index: number | null
@@ -24,10 +25,14 @@ export type Database = {
           id: string
           imposter_clue: string | null
           imposter_count: number
+          imposter_max: number
+          imposter_min: number
+          imposter_random: boolean
           phase: string
           word: string | null
         }
         Insert: {
+          clue_rounds?: number
           code: string
           created_at?: string
           current_turn_index?: number | null
@@ -36,10 +41,14 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
+          imposter_max?: number
+          imposter_min?: number
+          imposter_random?: boolean
           phase?: string
           word?: string | null
         }
         Update: {
+          clue_rounds?: number
           code?: string
           created_at?: string
           current_turn_index?: number | null
@@ -48,6 +57,9 @@ export type Database = {
           id?: string
           imposter_clue?: string | null
           imposter_count?: number
+          imposter_max?: number
+          imposter_min?: number
+          imposter_random?: boolean
           phase?: string
           word?: string | null
         }
@@ -66,6 +78,7 @@ export type Database = {
           clue: string | null
           created_at: string
           game_id: string
+          has_voted: boolean
           id: string
           is_host: boolean
           is_imposter: boolean
@@ -77,6 +90,7 @@ export type Database = {
           clue?: string | null
           created_at?: string
           game_id: string
+          has_voted?: boolean
           id?: string
           is_host?: boolean
           is_imposter?: boolean
@@ -88,6 +102,7 @@ export type Database = {
           clue?: string | null
           created_at?: string
           game_id?: string
+          has_voted?: boolean
           id?: string
           is_host?: boolean
           is_imposter?: boolean
