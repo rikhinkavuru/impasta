@@ -210,9 +210,9 @@ export function useGame() {
 
       await supabase.from('games').update({ host_player_id: playerData.id }).eq('id', gameData.id);
 
-      setGame({ ...gameData, host_player_id: playerData.id } as Game);
+      setGame({ ...gameData, host_player_id: playerData.id } as unknown as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([playerData as Player]);
+      setPlayers([playerData as unknown as Player]);
     } catch (e: unknown) {
       setError(getErrorMessage(e));
     } finally {
