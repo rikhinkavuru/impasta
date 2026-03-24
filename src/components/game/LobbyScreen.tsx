@@ -206,11 +206,11 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
 
                 {/* Difficulty */}
                 <SettingsRow label="Difficulty">
-                  <SegmentedControl
-                    options={['easy', 'medium', 'hard'] as Difficulty[]}
+                  <SegmentedControl<Difficulty>
+                    options={['easy', 'medium', 'hard']}
                     value={difficulty}
-                    onChange={setDifficulty}
-                    renderOption={(d, active) => {
+                    onChange={(d) => setDifficulty(d)}
+                    renderOption={(d) => {
                       const cfg = difficultyConfig[d];
                       const Icon = cfg.icon;
                       return (
