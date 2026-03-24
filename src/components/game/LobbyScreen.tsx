@@ -24,7 +24,7 @@ function inferImposterRandom(g: Game): boolean {
 }
 
 /* ── Segmented Control ── */
-function SegmentedControl<T extends string | number>({
+function SegmentedControl<T extends string | number = string>({
   options,
   value,
   onChange,
