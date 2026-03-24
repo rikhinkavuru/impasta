@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Copy, Check, Settings, ChevronDown, ChevronUp, Shuffle, Hash, MessageSquare, Zap, Flame, Brain } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import type { Game, Player, GameSettings } from '@/hooks/useGame';
 import type { Difficulty } from '@/lib/wordBank';
 import { cn } from '@/lib/utils';
