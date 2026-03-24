@@ -239,7 +239,7 @@ export function useGame() {
         .single();
       if (playerError) throw playerError;
 
-      setGame(gameData as Game);
+      setGame(gameData as unknown as Game);
       setCurrentPlayerId(playerData.id);
       await fetchPlayers(gameData.id);
     } catch (e: unknown) {
