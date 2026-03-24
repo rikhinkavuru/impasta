@@ -24,20 +24,20 @@ function inferImposterRandom(g: Game): boolean {
 }
 
 /* ── Segmented Control ── */
-function SegmentedControl<T extends string | number = string>({
+function SegmentedControl<T,>({
   options,
   value,
   onChange,
   renderOption,
 }: {
-  options: T[];
+  options: readonly T[];
   value: T;
   onChange: (v: T) => void;
   renderOption: (opt: T, active: boolean) => React.ReactNode;
 }) {
   return (
     <div className="flex rounded-2xl bg-secondary/50 p-1 gap-0.5">
-      {options.map((opt) => {
+      {options.map((opt, idx) => {
         const active = opt === value;
         return (
           <button
