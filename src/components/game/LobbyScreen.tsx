@@ -262,22 +262,24 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
 
                   {/* Fixed count chips */}
                   {!imposterRandom && (
-                    <div className="flex gap-1.5 pt-1">
-                      {Array.from({ length: Math.min(Math.max(playerCount + 1, 2), 7) }, (_, i) => (
-                        <button
-                          key={i}
-                          type="button"
-                          onClick={() => setFixedCount(i)}
-                          className={cn(
-                            'w-9 h-9 rounded-xl text-xs font-extrabold transition-all duration-200',
-                            fixedCount === i
-                              ? 'bg-primary text-primary-foreground shadow-sm scale-105'
-                              : 'bg-secondary/50 text-muted-foreground hover:bg-secondary hover:text-foreground'
-                          )}
-                        >
-                          {i}
-                        </button>
-                      ))}
+                    <div className="space-y-2 pt-1 px-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-foreground">{fixedCount}</span>
+                        <span className="text-[8px] font-black text-muted-foreground/40 uppercase tracking-widest">
+                          {fixedCount === 1 ? 'imposter' : 'imposters'}
+                        </span>
+                      </div>
+                      <Slider
+                        min={0}
+                        max={Math.max(Math.min(playerCount, 6), 1)}
+                        step={1}
+                        value={[fixedCount]}
+                        onValueChange={([v]) => setFixedCount(v)}
+                      />
+                      <div className="flex justify-between text-[8px] font-bold text-muted-foreground/30">
+                        <span>0</span>
+                        <span>{Math.max(Math.min(playerCount, 6), 1)}</span>
+                      </div>
                     </div>
                   )}
 
