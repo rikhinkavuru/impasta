@@ -229,14 +229,14 @@ export default function LobbyScreen({ game, players, isHost, onStartGame, onUpda
 
                 {/* Clue Rounds */}
                 <SettingsRow label="Clue Rounds">
-                  <SegmentedControl
+                  <SegmentedControl<number>
                     options={[1, 2, 3]}
                     value={clueRounds}
-                    onChange={setClueRounds}
+                    onChange={(r) => setClueRounds(r)}
                     renderOption={(r) => (
                       <>
                         <MessageSquare className="w-3 h-3" />
-                        <span>{r}</span>
+                        <span>{String(r)}</span>
                       </>
                     )}
                   />
