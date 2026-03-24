@@ -184,7 +184,7 @@ export function useGame() {
       .select('*')
       .eq('game_id', gameId)
       .order('turn_order', { ascending: true, nullsFirst: false });
-    if (data) setPlayers(data as Player[]);
+    if (data) setPlayers(data as unknown as Player[]);
   };
 
   const createGame = useCallback(async (hostName: string) => {
@@ -210,9 +210,9 @@ export function useGame() {
 
       await supabase.from('games').update({ host_player_id: playerData.id }).eq('id', gameData.id);
 
-      setGame({ ...gameData, host_player_id: playerData.id } as Game);
+      setGame({ ...gameData, host_player_id: playerData.id } as unknown as Game);
       setCurrentPlayerId(playerData.id);
-      setPlayers([playerData as Player]);
+      setPlayers([playerData as unknown as Player]);
     } catch (e: unknown) {
       setError(getErrorMessage(e));
     } finally {
@@ -239,7 +239,7 @@ export function useGame() {
         .single();
       if (playerError) throw playerError;
 
-      setGame(gameData as Game);
+      setGame(gameData as unknown as Game);
       setCurrentPlayerId(playerData.id);
       await fetchPlayers(gameData.id);
     } catch (e: unknown) {
@@ -329,16 +329,17 @@ export function useGame() {
     // Write this player's clue to the DB
     await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
 
-    // Fetch fresh player state from DB to avoid stale-closure issues
-    const { data: freshPlayers } = await supabase
-      .from('players')
-      .select('*')
-      .eq('game_id', game.id);
+    // Fetch fresh game AND player state from DB to avoid stale-closure issues
+    const [{ data: freshGameData }, { data: freshPlayers }] = await Promise.all([
+      supabase.from('games').select('*').eq('id', game.id).single(),
+      supabase.from('players').select('*').eq('game_id', game.id),
+    ]);
 
-    if (!freshPlayers) return;
+    if (!freshPlayers || !freshGameData) return;
 
-    const totalTurns = (game.clue_rounds || 1) * freshPlayers.length;
-    const currentTurnIndex = game.current_turn_index ?? 0;
+    const freshClueRounds = (freshGameData as unknown as Game).clue_rounds || 1;
+    const totalTurns = freshClueRounds * freshPlayers.length;
+    const currentTurnIndex = freshGameData.current_turn_index ?? 0;
     const currentRound = Math.floor(currentTurnIndex / freshPlayers.length);
     const turnInRound = currentTurnIndex % freshPlayers.length;
 
@@ -386,7 +387,7 @@ export function useGame() {
       .eq('game_id', game.id);
 
     if (freshPlayers) {
-      const allVoted = freshPlayers.every(p => p.has_voted);
+      const allVoted = freshPlayers.every(p => (p as unknown as Player).has_voted);
       if (allVoted) {
         await supabase.from('games').update({ phase: 'results' }).eq('id', game.id);
       }
