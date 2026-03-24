@@ -41,7 +41,7 @@ function SegmentedControl<T,>({
         const active = opt === value;
         return (
           <button
-            key={String(opt)}
+            key={idx}
             type="button"
             onClick={() => onChange(opt)}
             className={cn(
