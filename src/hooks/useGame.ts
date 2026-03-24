@@ -184,7 +184,7 @@ export function useGame() {
       .select('*')
       .eq('game_id', gameId)
       .order('turn_order', { ascending: true, nullsFirst: false });
-    if (data) setPlayers(data as Player[]);
+    if (data) setPlayers(data as unknown as Player[]);
   };
 
   const createGame = useCallback(async (hostName: string) => {
