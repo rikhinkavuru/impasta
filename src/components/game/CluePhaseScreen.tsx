@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Check, ArrowRight } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
+import { getClueRoundState } from '@/lib/clueRound';
 
 interface CluePhaseScreenProps {
   game: Game;
@@ -12,22 +13,18 @@ interface CluePhaseScreenProps {
 export default function CluePhaseScreen({ game, players, currentPlayer, onSubmitClue }: CluePhaseScreenProps) {
   const [clue, setClue] = useState('');
 
-  const sortedPlayers = [...players].sort((a, b) => (a.turn_order ?? 0) - (b.turn_order ?? 0));
-
-  const totalTurns = (game.clue_rounds || 1) * players.length;
-  const currentTurn = game.current_turn_index ?? 0;
-  const currentRound = Math.floor(currentTurn / players.length) + 1;
-  const turnInRound = currentTurn % players.length;
-
-  const activePlayer = sortedPlayers[turnInRound];
+  const { sortedPlayers, currentRound, currentTurnIndex, turnInRound, activePlayer } = getClueRoundState(
+    players,
+    game.clue_rounds,
+    game.current_turn_index,
+  );
   const isMyTurn = activePlayer?.id === currentPlayer.id;
-  // A player has submitted their clue for this turn if their clue field is populated
-  const hasSubmitted = !!currentPlayer.clue;
+  const hasSubmitted = isMyTurn && !!activePlayer?.clue;
 
   // Clear local input whenever the active turn slot changes
   useEffect(() => {
     setClue('');
-  }, [currentTurn]);
+  }, [currentTurnIndex]);
 
   const handleSubmit = () => {
     if (!clue.trim()) return;

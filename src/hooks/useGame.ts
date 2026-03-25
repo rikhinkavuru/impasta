@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
+import { getClueRoundState, getNextClueAction } from '@/lib/clueRound';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
 import { generateWordPairWithAI } from '@/lib/openaiWordGenerator';
 
@@ -71,6 +72,7 @@ export function useGame() {
   // Keep a ref to the latest players so callbacks always see fresh data
   const playersRef = useRef<Player[]>(players);
   useEffect(() => { playersRef.current = players; }, [players]);
+  const clueSubmissionInFlightRef = useRef(false);
 
   // Track used words whenever the game word changes
   useEffect(() => {
@@ -340,52 +342,48 @@ export function useGame() {
   }, [game, isHost]);
 
   const submitClue = useCallback(async (clue: string) => {
-    if (!game || !currentPlayerId) return;
+    if (!game || !currentPlayerId || clueSubmissionInFlightRef.current) return;
 
-    // Write this player's clue to the DB
-    await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
+    clueSubmissionInFlightRef.current = true;
 
-    // Fetch fresh game AND player state from DB to avoid stale-closure issues
-    const [{ data: freshGameData }, { data: freshPlayers }] = await Promise.all([
-      supabase.from('games').select('*').eq('id', game.id).single(),
-      supabase.from('players').select('*').eq('game_id', game.id),
-    ]);
+    try {
+      const [{ data: freshGameData }, { data: freshPlayers }] = await Promise.all([
+        supabase.from('games').select('*').eq('id', game.id).single(),
+        supabase.from('players').select('*').eq('game_id', game.id),
+      ]);
 
-    if (!freshPlayers || !freshGameData) return;
+      if (!freshPlayers || !freshGameData) return;
 
-    const freshClueRounds = (freshGameData as unknown as Game).clue_rounds || 1;
-    const totalTurns = freshClueRounds * freshPlayers.length;
-    const currentTurnIndex = freshGameData.current_turn_index ?? 0;
-    const currentRound = Math.floor(currentTurnIndex / freshPlayers.length);
-    const turnInRound = currentTurnIndex % freshPlayers.length;
+      const clueRoundState = getClueRoundState(
+        freshPlayers as unknown as Player[],
+        (freshGameData as unknown as Game).clue_rounds,
+        freshGameData.current_turn_index,
+      );
 
-    // Check if every player in this round has submitted a clue
-    // Players are sorted by turn_order; those up to and including turnInRound should have clues
-    const sortedFresh = [...freshPlayers].sort(
-      (a, b) => (a.turn_order ?? 0) - (b.turn_order ?? 0)
-    );
-    const allSubmittedInThisRound = sortedFresh.every(p => p.clue !== null && p.clue !== '');
-
-    if (allSubmittedInThisRound) {
-      const nextTurnIndex = (currentRound + 1) * freshPlayers.length;
-
-      if (nextTurnIndex >= totalTurns) {
-        // All rounds complete — move to voting
-        await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
-      } else {
-        // Start the next clue round: clear all clues and set turn index to start of next round
-        for (const p of freshPlayers) {
-          await supabase.from('players').update({ clue: null }).eq('id', p.id);
-        }
-        await supabase.from('games').update({
-          current_turn_index: nextTurnIndex,
-        }).eq('id', game.id);
+      if (clueRoundState.activePlayer?.id !== currentPlayerId || clueRoundState.activePlayer.clue) {
+        return;
       }
-    } else {
-      // Advance to the next player's turn within this round
-      await supabase.from('games').update({
-        current_turn_index: currentTurnIndex + 1,
-      }).eq('id', game.id);
+
+      await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
+
+      const nextAction = getNextClueAction(clueRoundState);
+
+      if (nextAction.type === 'start_voting') {
+        await supabase.from('games').update({ phase: 'voting' }).eq('id', game.id);
+        return;
+      }
+
+      if (nextAction.type === 'next_round') {
+        await Promise.all([
+          supabase.from('players').update({ clue: null }).eq('game_id', game.id),
+          supabase.from('games').update({ current_turn_index: nextAction.nextTurnIndex }).eq('id', game.id),
+        ]);
+        return;
+      }
+
+      await supabase.from('games').update({ current_turn_index: nextAction.nextTurnIndex }).eq('id', game.id);
+    } finally {
+      clueSubmissionInFlightRef.current = false;
     }
   }, [game, currentPlayerId]);
 
