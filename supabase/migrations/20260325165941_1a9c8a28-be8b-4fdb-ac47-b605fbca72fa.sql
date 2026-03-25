@@ -1,0 +1,1 @@
+ALTER TABLE public.players ALTER COLUMN vote_for TYPE text USING vote_for::text;
