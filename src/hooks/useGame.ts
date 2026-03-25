@@ -146,10 +146,17 @@ export function useGame() {
         }
 
         if (!player.is_imposter && player.vote_for) {
-          const votedPlayer = latestPlayers.find(p => p.id === player.vote_for);
-          if (votedPlayer?.is_imposter) {
-            pointsToAdd += 3;
-            correctVotesIncrement = 1;
+          let votedIds: string[];
+          try {
+            const parsed = JSON.parse(player.vote_for);
+            votedIds = Array.isArray(parsed) ? parsed : [player.vote_for];
+          } catch {
+            votedIds = [player.vote_for];
+          }
+          const correctVotes = votedIds.filter(id => latestPlayers.find(p => p.id === id)?.is_imposter);
+          if (correctVotes.length > 0) {
+            pointsToAdd += 3 * correctVotes.length;
+            correctVotesIncrement = correctVotes.length;
           }
         }
 
