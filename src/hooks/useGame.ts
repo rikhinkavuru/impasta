@@ -100,7 +100,16 @@ export function useGame() {
     const voteCounts: Record<string, number> = {};
     latestPlayers.forEach(p => {
       if (p.vote_for) {
-        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+        let votedIds: string[];
+        try {
+          const parsed = JSON.parse(p.vote_for);
+          votedIds = Array.isArray(parsed) ? parsed : [p.vote_for];
+        } catch {
+          votedIds = [p.vote_for];
+        }
+        votedIds.forEach(id => {
+          voteCounts[id] = (voteCounts[id] || 0) + 1;
+        });
       }
     });
 
