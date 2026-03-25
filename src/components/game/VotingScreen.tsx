@@ -5,21 +5,42 @@ import type { Player } from '@/hooks/useGame';
 interface VotingScreenProps {
   players: Player[];
   currentPlayer: Player;
-  onVote: (playerId: string | null) => void;
+  onVote: (playerIds: string[]) => void;
 }
 
 export default function VotingScreen({ players, currentPlayer, onVote }: VotingScreenProps) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [skipVote, setSkipVote] = useState(false);
   const hasVoted = !!currentPlayer.has_voted;
 
+  const handleToggle = (id: string) => {
+    setSkipVote(false);
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleVote = () => {
     if (skipVote) {
-      onVote(null);
-    } else if (selectedId) {
-      onVote(selectedId);
+      onVote([]);
+    } else if (selectedIds.size > 0) {
+      onVote(Array.from(selectedIds));
     }
   };
+
+  // Parse existing votes for display
+  const currentVotes: string[] = (() => {
+    if (!currentPlayer.vote_for) return [];
+    try {
+      const parsed = JSON.parse(currentPlayer.vote_for);
+      return Array.isArray(parsed) ? parsed : [currentPlayer.vote_for];
+    } catch {
+      return currentPlayer.vote_for ? [currentPlayer.vote_for] : [];
+    }
+  })();
 
   const votedCount = players.filter(p => p.has_voted).length;
 
@@ -30,26 +51,25 @@ export default function VotingScreen({ players, currentPlayer, onVote }: VotingS
         <div className="text-center space-y-4">
           <p className="text-[10px] font-extrabold text-muted-foreground/60 uppercase tracking-[0.3em]">Voting Phase</p>
           <h2 className="text-2xl font-extrabold tracking-tight text-foreground uppercase">
-            {hasVoted ? 'VOTE CAST' : 'IDENTIFY THE IMPOSTER'}
+            {hasVoted ? 'VOTES CAST' : 'IDENTIFY THE IMPOSTERS'}
           </h2>
-          <p className="text-xs font-medium text-muted-foreground/60">Choose wisely. Every vote counts.</p>
+          <p className="text-xs font-medium text-muted-foreground/60">
+            {hasVoted ? 'Waiting for others to vote.' : 'Select one or more suspects. Choose wisely.'}
+          </p>
         </div>
 
         {/* Voting Cards */}
         <div className="grid grid-cols-1 gap-4">
           {players.map((player) => {
             const isSelf = player.id === currentPlayer.id;
-            const isSelected = selectedId === player.id && !skipVote;
-            const isVotedFor = hasVoted && currentPlayer.vote_for === player.id;
+            const isSelected = selectedIds.has(player.id) && !skipVote;
+            const isVotedFor = hasVoted && currentVotes.includes(player.id);
 
             return (
               <button
                 key={player.id}
                 disabled={hasVoted || isSelf}
-                onClick={() => {
-                  setSelectedId(player.id);
-                  setSkipVote(false);
-                }}
+                onClick={() => handleToggle(player.id)}
                 className={`group relative flex flex-col items-start gap-4 p-6 rounded-[2.5rem] border-2 transition-all duration-300 text-left ${
                   isVotedFor || isSelected
                     ? 'bg-primary border-primary accent-glow'
@@ -107,7 +127,7 @@ export default function VotingScreen({ players, currentPlayer, onVote }: VotingS
           <button
             onClick={() => {
               setSkipVote(prev => !prev);
-              setSelectedId(null);
+              setSelectedIds(new Set());
             }}
             className={`w-full flex items-center justify-center gap-2 px-6 py-4 rounded-[2rem] border-2 transition-all ${
               skipVote
@@ -123,10 +143,10 @@ export default function VotingScreen({ players, currentPlayer, onVote }: VotingS
         {!hasVoted && (
           <button
             onClick={handleVote}
-            disabled={!selectedId && !skipVote}
+            disabled={selectedIds.size === 0 && !skipVote}
             className="w-full pill-button bg-primary text-primary-foreground accent-glow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            SUBMIT VOTE
+            SUBMIT VOTE{selectedIds.size > 1 ? `S (${selectedIds.size})` : ''}
             <Vote className="w-5 h-5" />
           </button>
         )}
