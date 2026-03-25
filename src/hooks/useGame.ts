@@ -373,11 +373,14 @@ export function useGame() {
     }
   }, [game, currentPlayerId]);
 
-  const submitVote = useCallback(async (votedPlayerId: string | null) => {
+  const submitVote = useCallback(async (votedPlayerIds: string[]) => {
     if (!game || !currentPlayerId) return;
 
+    // Store as JSON array string (empty array = skip vote)
+    const voteValue = votedPlayerIds.length > 0 ? JSON.stringify(votedPlayerIds) : null;
+
     await supabase.from('players').update({
-      vote_for: votedPlayerId,
+      vote_for: voteValue,
       has_voted: true,
     }).eq('id', currentPlayerId);
 
