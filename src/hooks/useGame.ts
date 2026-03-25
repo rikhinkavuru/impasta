@@ -100,7 +100,16 @@ export function useGame() {
     const voteCounts: Record<string, number> = {};
     latestPlayers.forEach(p => {
       if (p.vote_for) {
-        voteCounts[p.vote_for] = (voteCounts[p.vote_for] || 0) + 1;
+        let votedIds: string[];
+        try {
+          const parsed = JSON.parse(p.vote_for);
+          votedIds = Array.isArray(parsed) ? parsed : [p.vote_for];
+        } catch {
+          votedIds = [p.vote_for];
+        }
+        votedIds.forEach(id => {
+          voteCounts[id] = (voteCounts[id] || 0) + 1;
+        });
       }
     });
 
@@ -137,10 +146,17 @@ export function useGame() {
         }
 
         if (!player.is_imposter && player.vote_for) {
-          const votedPlayer = latestPlayers.find(p => p.id === player.vote_for);
-          if (votedPlayer?.is_imposter) {
-            pointsToAdd += 3;
-            correctVotesIncrement = 1;
+          let votedIds: string[];
+          try {
+            const parsed = JSON.parse(player.vote_for);
+            votedIds = Array.isArray(parsed) ? parsed : [player.vote_for];
+          } catch {
+            votedIds = [player.vote_for];
+          }
+          const correctVotes = votedIds.filter(id => latestPlayers.find(p => p.id === id)?.is_imposter);
+          if (correctVotes.length > 0) {
+            pointsToAdd += 3 * correctVotes.length;
+            correctVotesIncrement = correctVotes.length;
           }
         }
 
@@ -373,11 +389,14 @@ export function useGame() {
     }
   }, [game, currentPlayerId]);
 
-  const submitVote = useCallback(async (votedPlayerId: string | null) => {
+  const submitVote = useCallback(async (votedPlayerIds: string[]) => {
     if (!game || !currentPlayerId) return;
 
+    // Store as JSON array string (empty array = skip vote)
+    const voteValue = votedPlayerIds.length > 0 ? JSON.stringify(votedPlayerIds) : null;
+
     await supabase.from('players').update({
-      vote_for: votedPlayerId,
+      vote_for: voteValue,
       has_voted: true,
     }).eq('id', currentPlayerId);
 

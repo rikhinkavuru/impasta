@@ -118,13 +118,6 @@ export type Database = {
             referencedRelation: "games"
             referencedColumns: ["id"]
           },
-          {
-            foreignKeyName: "players_vote_for_fkey"
-            columns: ["vote_for"]
-            isOneToOne: false
-            referencedRelation: "players"
-            referencedColumns: ["id"]
-          },
         ]
       }
     }
