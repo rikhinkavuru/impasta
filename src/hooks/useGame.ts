@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { generateGameCode, shuffleArray } from '@/lib/gameUtils';
+import { generateGameCode, shuffleArray, parseVoteIds } from '@/lib/gameUtils';
 import { getClueRoundState, getNextClueAction } from '@/lib/clueRound';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
 import { generateWordPairWithAI } from '@/lib/openaiWordGenerator';
@@ -21,7 +21,6 @@ export interface Game {
   imposter_clue: string | null;
   current_turn_index: number;
   difficulty: Difficulty;
-  imposter_count: number;
   imposter_min: number;
   imposter_max: number;
   imposter_random: boolean;
@@ -73,6 +72,7 @@ export function useGame() {
   const playersRef = useRef<Player[]>(players);
   useEffect(() => { playersRef.current = players; }, [players]);
   const clueSubmissionInFlightRef = useRef(false);
+  const scoredRoundIdRef = useRef<string | null>(null);
 
   // Track used words whenever the game word changes
   useEffect(() => {
@@ -97,22 +97,18 @@ export function useGame() {
   // Compute and persist scores when the game reaches the results phase
   useEffect(() => {
     if (game?.phase !== 'results') return;
+    // Guard: only score once per round (identified by the game's current word)
+    const roundKey = `${game.id}-${game.word}`;
+    if (scoredRoundIdRef.current === roundKey) return;
+    scoredRoundIdRef.current = roundKey;
+
     const latestPlayers = playersRef.current;
 
     const voteCounts: Record<string, number> = {};
     latestPlayers.forEach(p => {
-      if (p.vote_for) {
-        let votedIds: string[];
-        try {
-          const parsed = JSON.parse(p.vote_for);
-          votedIds = Array.isArray(parsed) ? parsed : [p.vote_for];
-        } catch {
-          votedIds = [p.vote_for];
-        }
-        votedIds.forEach(id => {
-          voteCounts[id] = (voteCounts[id] || 0) + 1;
-        });
-      }
+      parseVoteIds(p.vote_for).forEach(id => {
+        voteCounts[id] = (voteCounts[id] || 0) + 1;
+      });
     });
 
     const maxVotes = Math.max(...Object.values(voteCounts), 0);
@@ -148,13 +144,7 @@ export function useGame() {
         }
 
         if (!player.is_imposter && player.vote_for) {
-          let votedIds: string[];
-          try {
-            const parsed = JSON.parse(player.vote_for);
-            votedIds = Array.isArray(parsed) ? parsed : [player.vote_for];
-          } catch {
-            votedIds = [player.vote_for];
-          }
+          const votedIds = parseVoteIds(player.vote_for);
           const correctVotes = votedIds.filter(id => latestPlayers.find(p => p.id === id)?.is_imposter);
           if (correctVotes.length > 0) {
             pointsToAdd += 3 * correctVotes.length;
@@ -172,7 +162,7 @@ export function useGame() {
         };
       })
     );
-  }, [game?.phase]);
+  }, [game?.phase, game?.word]);
 
   useEffect(() => {
     if (!game?.id) return;
@@ -374,10 +364,9 @@ export function useGame() {
       }
 
       if (nextAction.type === 'next_round') {
-        await Promise.all([
-          supabase.from('players').update({ clue: null }).eq('game_id', game.id),
-          supabase.from('games').update({ current_turn_index: nextAction.nextTurnIndex }).eq('id', game.id),
-        ]);
+        // Clear clues first, then advance turn index to avoid race conditions
+        await supabase.from('players').update({ clue: null }).eq('game_id', game.id);
+        await supabase.from('games').update({ current_turn_index: nextAction.nextTurnIndex }).eq('id', game.id);
         return;
       }
 
