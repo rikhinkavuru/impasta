@@ -1,6 +1,6 @@
 import { Trophy, Skull, RotateCcw, Medal, ArrowRight } from 'lucide-react';
 import type { Game, Player, SessionScore } from '@/hooks/useGame';
-import { parseVoteIds } from '@/lib/gameUtils';
+import { parseVoteIds, parseClues } from '@/lib/gameUtils';
 
 interface ResultsScreenProps {
   game: Game;
@@ -118,8 +118,12 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
                         <span className="ml-2 text-[10px] font-black text-destructive tracking-widest">IMPOSTER</span>
                       )}
                     </p>
-                    {player.clue && (
-                      <p className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">&ldquo;{player.clue}&rdquo;</p>
+                    {parseClues(player.clue).length > 0 && (
+                      <div className="flex flex-wrap gap-1">
+                        {parseClues(player.clue).map((c, idx) => (
+                          <span key={idx} className="text-xs font-extrabold text-muted-foreground/60 uppercase italic">&ldquo;{c}&rdquo;</span>
+                        ))}
+                      </div>
                     )}
                   </div>
                   <div className="text-right">

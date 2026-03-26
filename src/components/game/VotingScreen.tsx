@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Vote, Check, ShieldCheck, X } from 'lucide-react';
 import type { Player } from '@/hooks/useGame';
-import { parseVoteIds } from '@/lib/gameUtils';
+import { parseVoteIds, parseClues } from '@/lib/gameUtils';
 
 interface VotingScreenProps {
   players: Player[];
@@ -99,14 +99,19 @@ export default function VotingScreen({ players, currentPlayer, onVote }: VotingS
                     {player.name}
                     {isSelf && <span className="ml-2 text-[10px] opacity-60">YOU</span>}
                   </p>
-                  {player.clue && (
-                    <p
-                      className={`text-sm font-extrabold tracking-tight uppercase italic ${
-                        isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                      }`}
-                    >
-                      &ldquo;{player.clue}&rdquo;
-                    </p>
+                {parseClues(player.clue).length > 0 && (
+                    <div className="space-y-0.5">
+                      {parseClues(player.clue).map((c, idx) => (
+                        <p
+                          key={idx}
+                          className={`text-sm font-extrabold tracking-tight uppercase italic ${
+                            isSelected || isVotedFor ? 'text-primary-foreground/80' : 'text-muted-foreground'
+                          }`}
+                        >
+                          &ldquo;{c}&rdquo;
+                        </p>
+                      ))}
+                    </div>
                   )}
                 </div>
               </button>

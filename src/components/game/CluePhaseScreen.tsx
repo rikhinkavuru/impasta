@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Check, ArrowRight } from 'lucide-react';
 import type { Game, Player } from '@/hooks/useGame';
 import { getClueRoundState } from '@/lib/clueRound';
+import { hasClueForRound, parseClues } from '@/lib/gameUtils';
 
 interface CluePhaseScreenProps {
   game: Game;
@@ -19,7 +20,7 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
     game.current_turn_index,
   );
   const isMyTurn = activePlayer?.id === currentPlayer.id;
-  const hasSubmitted = isMyTurn && !!activePlayer?.clue;
+  const hasSubmitted = isMyTurn && hasClueForRound(activePlayer?.clue ?? null, currentRound);
 
   // Clear local input whenever the active turn slot changes
   useEffect(() => {
@@ -57,7 +58,8 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
         <div className="space-y-3">
           {sortedPlayers.map((player, i) => {
             const isActive = i === turnInRound;
-            const isDone = i < turnInRound || (isActive && !!player.clue);
+            const isDone = i < turnInRound || (isActive && hasClueForRound(player.clue, currentRound));
+            const latestClue = parseClues(player.clue).at(-1);
 
             return (
               <div
@@ -96,9 +98,9 @@ export default function CluePhaseScreen({ game, players, currentPlayer, onSubmit
                   </span>
                 </div>
 
-                {player.clue && (
+                {latestClue && (
                   <span className="text-sm font-extrabold tracking-tight text-foreground uppercase">
-                    &ldquo;{player.clue}&rdquo;
+                    &ldquo;{latestClue}&rdquo;
                   </span>
                 )}
               </div>
