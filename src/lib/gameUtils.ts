@@ -25,3 +25,17 @@ export function parseVoteIds(voteFor: string | null): string[] {
     return [voteFor];
   }
 }
+
+export function parseClues(clue: string | null): string[] {
+  if (!clue) return [];
+  try {
+    const parsed = JSON.parse(clue);
+    return Array.isArray(parsed) ? parsed : [clue];
+  } catch {
+    return [clue];
+  }
+}
+
+export function hasClueForRound(clue: string | null, round: number): boolean {
+  return parseClues(clue).length >= round;
+}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { generateGameCode, shuffleArray, parseVoteIds } from '@/lib/gameUtils';
+import { generateGameCode, shuffleArray, parseVoteIds, parseClues, hasClueForRound } from '@/lib/gameUtils';
 import { getClueRoundState, getNextClueAction } from '@/lib/clueRound';
 import { getRandomWordPair, normalizeImposterClueToOneWord, type Difficulty } from '@/lib/wordBank';
 import { generateWordPairWithAI } from '@/lib/openaiWordGenerator';
@@ -350,11 +350,14 @@ export function useGame() {
         freshGameData.current_turn_index,
       );
 
-      if (clueRoundState.activePlayer?.id !== currentPlayerId || clueRoundState.activePlayer.clue) {
+      if (clueRoundState.activePlayer?.id !== currentPlayerId || hasClueForRound(clueRoundState.activePlayer?.clue ?? null, clueRoundState.currentRound)) {
         return;
       }
 
-      await supabase.from('players').update({ clue }).eq('id', currentPlayerId);
+      // Append clue to JSON array instead of overwriting
+      const existingClues = parseClues(clueRoundState.activePlayer?.clue ?? null);
+      const updatedClues = JSON.stringify([...existingClues, clue]);
+      await supabase.from('players').update({ clue: updatedClues }).eq('id', currentPlayerId);
 
       const nextAction = getNextClueAction(clueRoundState);
 
@@ -364,8 +367,7 @@ export function useGame() {
       }
 
       if (nextAction.type === 'next_round') {
-        // Clear clues first, then advance turn index to avoid race conditions
-        await supabase.from('players').update({ clue: null }).eq('game_id', game.id);
+        // Don't clear clues — they accumulate as JSON arrays across rounds
         await supabase.from('games').update({ current_turn_index: nextAction.nextTurnIndex }).eq('id', game.id);
         return;
       }
