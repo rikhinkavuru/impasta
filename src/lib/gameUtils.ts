@@ -15,3 +15,13 @@ export function shuffleArray<T>(array: T[]): T[] {
   }
   return shuffled;
 }
+
+export function parseVoteIds(voteFor: string | null): string[] {
+  if (!voteFor) return [];
+  try {
+    const parsed = JSON.parse(voteFor);
+    return Array.isArray(parsed) ? parsed : [voteFor];
+  } catch {
+    return [voteFor];
+  }
+}

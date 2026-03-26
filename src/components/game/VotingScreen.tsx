@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Vote, Check, ShieldCheck, X } from 'lucide-react';
 import type { Player } from '@/hooks/useGame';
+import { parseVoteIds } from '@/lib/gameUtils';
 
 interface VotingScreenProps {
   players: Player[];
@@ -31,16 +32,7 @@ export default function VotingScreen({ players, currentPlayer, onVote }: VotingS
     }
   };
 
-  // Parse existing votes for display
-  const currentVotes: string[] = (() => {
-    if (!currentPlayer.vote_for) return [];
-    try {
-      const parsed = JSON.parse(currentPlayer.vote_for);
-      return Array.isArray(parsed) ? parsed : [currentPlayer.vote_for];
-    } catch {
-      return currentPlayer.vote_for ? [currentPlayer.vote_for] : [];
-    }
-  })();
+  const currentVotes = parseVoteIds(currentPlayer.vote_for);
 
   const votedCount = players.filter(p => p.has_voted).length;
 

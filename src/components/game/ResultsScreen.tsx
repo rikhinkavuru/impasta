@@ -1,5 +1,6 @@
 import { Trophy, Skull, RotateCcw, Medal, ArrowRight } from 'lucide-react';
 import type { Game, Player, SessionScore } from '@/hooks/useGame';
+import { parseVoteIds } from '@/lib/gameUtils';
 
 interface ResultsScreenProps {
   game: Game;
@@ -17,18 +18,9 @@ export default function ResultsScreen({ game, players, sessionScores, currentPla
   // Count votes
   const voteCounts: Record<string, number> = {};
   players.forEach(p => {
-    if (p.vote_for) {
-      let votedIds: string[];
-      try {
-        const parsed = JSON.parse(p.vote_for);
-        votedIds = Array.isArray(parsed) ? parsed : [p.vote_for];
-      } catch {
-        votedIds = [p.vote_for];
-      }
-      votedIds.forEach(id => {
-        voteCounts[id] = (voteCounts[id] || 0) + 1;
-      });
-    }
+    parseVoteIds(p.vote_for).forEach(id => {
+      voteCounts[id] = (voteCounts[id] || 0) + 1;
+    });
   });
 
   const maxVotes = Math.max(...Object.values(voteCounts), 0);
